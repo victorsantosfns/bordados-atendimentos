@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bordados — Atendimentos do Setor de Bordados</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{--primary:#a01520;--primary-dark:#7a0f17;--bg:#f0f0f0;--card:#ffffff;--text:#333333;--border:#dddddd;--secondary:#6c757d;--success:#28a745;--danger:#dc3545;}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+#loginScreen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
+.login-card{background:var(--card);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);width:100%;max-width:420px;overflow:hidden;}
+.login-header{background:var(--primary);color:#fff;padding:28px 24px;text-align:center;}
+.login-header svg{width:52px;height:52px;margin-bottom:10px;}
+.login-header h1{font-size:2rem;letter-spacing:3px;font-weight:700;}
+.login-header p{font-size:.9rem;opacity:.85;margin-top:4px;}
+.login-body{padding:28px 24px;}
+.login-body label{display:block;font-size:.85rem;font-weight:600;color:var(--secondary);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;}
+.login-body select,.login-body input[type=password]{width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:7px;font-size:1rem;margin-bottom:16px;transition:border-color .2s;}
+.login-body select:focus,.login-body input:focus{border-color:var(--primary);outline:none;}
+.btn-login{width:100%;padding:12px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:1rem;font-weight:600;cursor:pointer;transition:background .2s;}
+.btn-login:hover{background:var(--primary-dark);}
+.forgot-link{display:block;text-align:center;margin-top:14px;color:var(--primary);font-size:.88rem;cursor:pointer;text-decoration:underline;}
+.login-msg{margin-top:12px;padding:9px 12px;border-radius:6px;font-size:.9rem;text-align:center;display:none;}
+.login-msg.error{background:#fde8e8;color:var(--danger);display:block;}
+.login-msg.success{background:#e8f8ee;color:var(--success);display:block;}
+#changePwScreen{display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
+.changepw-card{background:var(--card);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.18);width:100%;max-width:400px;overflow:hidden;}
+.changepw-header{background:var(--primary);color:#fff;padding:22px 24px;text-align:center;}
+.changepw-header h2{font-size:1.3rem;}
+.changepw-body{padding:24px;}
+.changepw-body p{font-size:.92rem;color:var(--secondary);margin-bottom:18px;}
+.changepw-body input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:1rem;margin-bottom:14px;}
+.changepw-body input:focus{border-color:var(--primary);outline:none;}
+.btn-changepw{width:100%;padding:11px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:1rem;font-weight:600;cursor:pointer;}
+.btn-changepw:hover{background:var(--primary-dark);}
+#changePwMsg{margin-top:10px;font-size:.88rem;color:var(--danger);}
+.app-header{background:var(--primary);color:#fff;padding:0 24px;height:60px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:100;}
+.app-header svg{width:32px;height:32px;flex-shrink:0;}
+.app-header .app-title{font-size:1.15rem;font-weight:700;letter-spacing:2px;}
+.app-header .app-sub{font-size:.8rem;opacity:.8;margin-left:4px;}
+.app-header .spacer{flex:1;}
+.btn-sair{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:.9rem;transition:background .2s;}
+.btn-sair:hover{background:rgba(255,255,255,.3);}
+.tabs-bar{background:var(--card);border-bottom:2px solid var(--border);display:flex;padding:0 16px;gap:4px;overflow-x:auto;}
+.tab-btn{padding:14px 20px;border:none;background:none;cursor:pointer;font-size:.95rem;color:var(--secondary);border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap;transition:color .2s,border-color .2s;font-weight:500;}
+.tab-btn:hover{color:var(--primary);}
+.tab-btn.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600;}
+.tab-content{display:none;padding:24px;max-width:1400px;margin:0 auto;width:100%;}
+.tab-content.active{display:block;}
+.card{background:var(--card);border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.08);padding:22px;margin-bottom:20px;}
+.card h3{font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1.5px solid var(--border);padding-bottom:10px;}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+.form-group{display:flex;flex-direction:column;}
+.form-group label{font-size:.78rem;font-weight:600;color:var(--secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;}
+.form-group input,.form-group select,.form-group textarea{padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:.95rem;background:#fff;transition:border-color .2s;}
+.form-group input:focus,.form-group select:focus{border-color:var(--primary);outline:none;}
+.toalhas-wrap{overflow-x:auto;}
+table.toalhas-table{width:100%;border-collapse:collapse;font-size:.9rem;}
+table.toalhas-table th{background:var(--primary);color:#fff;padding:9px 10px;text-align:left;font-size:.78rem;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;}
+table.toalhas-table td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
+table.toalhas-table input,table.toalhas-table select{padding:6px 8px;border:1.5px solid var(--border);border-radius:5px;font-size:.88rem;width:100%;min-width:80px;}
+table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:var(--primary);outline:none;}
+.btn-rm-row{background:var(--danger);color:#fff;border:none;border-radius:5px;padding:5px 9px;cursor:pointer;font-size:.82rem;}
+.btn-add-row{background:var(--primary);color:#fff;border:none;border-radius:7px;padding:9px 16px;cursor:pointer;font-size:.88rem;margin-top:10px;}
+.toalhas-counter{font-size:.82rem;color:var(--secondary);margin-top:6px;}
+.btn-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px;}
+.btn-primary{background:var(--primary);color:#fff;border:none;border-radius:7px;padding:11px 24px;font-size:.95rem;font-weight:600;cursor:pointer;transition:background .2s;}
+.btn-primary:hover{background:var(--primary-dark);}
+.btn-secondary{background:var(--secondary);color:#fff;border:none;border-radius:7px;padding:11px 20px;font-size:.95rem;cursor:pointer;transition:background .2s;}
+.btn-secondary:hover{background:#5a6268;}
+.form-msg{font-size:.88rem;padding:8px 12px;border-radius:6px;display:none;}
+.form-msg.success{background:#e8f8ee;color:var(--success);display:inline-block;}
+.form-msg.error{background:#fde8e8;color:var(--danger);display:inline-block;}
+.table-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;}
+.table-toolbar input[type=text]{padding:8px 11px;border:1.5px solid var(--border);border-radius:7px;font-size:.9rem;min-width:220px;}
+.table-toolbar input:focus{border-color:var(--primary);outline:none;}
+.table-toolbar select{padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:.9rem;}
+.table-toolbar select:focus{border-color:var(--primary);outline:none;}
+.btn-reload{background:var(--primary);color:#fff;border:none;border-radius:7px;padding:8px 16px;cursor:pointer;font-size:.88rem;}
+.records-count{font-size:.85rem;color:var(--secondary);margin-left:auto;}
+.data-table{width:100%;border-collapse:collapse;font-size:.85rem;}
+.data-table th{background:var(--primary);color:#fff;padding:9px 10px;text-align:left;font-size:.75rem;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;}
+.data-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top;}
+.data-table tr:hover td{background:#faf0f0;}
+.data-table tr:last-child td{border-bottom:none;}
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border);}
+.cache-warn{background:#fff3cd;color:#856404;padding:9px 14px;border-radius:7px;font-size:.85rem;margin-bottom:12px;display:none;}
+.ci-search-row{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;}
+.ci-search-row input{flex:1;min-width:200px;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:.95rem;}
+.ci-search-row input:focus{border-color:var(--primary);outline:none;}
+.ci-results{display:flex;flex-direction:column;gap:14px;}
+.ci-card{background:#fff;border:1px solid var(--border);border-radius:9px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+.ci-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
+.ci-card-header .badge-filial{background:var(--primary);color:#fff;border-radius:5px;padding:3px 10px;font-size:.78rem;font-weight:600;}
+.ci-card-meta{font-size:.83rem;color:var(--secondary);display:flex;gap:16px;flex-wrap:wrap;}
+.ci-card-meta span strong{color:var(--text);}
+.ci-toalhas{margin-top:10px;}
+.ci-toalha-item{background:#f8f8f8;border-radius:6px;padding:8px 12px;margin-top:6px;font-size:.84rem;}
+.no-results{color:var(--secondary);font-size:.95rem;text-align:center;padding:30px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:20px;}
+.kpi-card{background:var(--card);border-radius:9px;padding:16px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.07);border-top:3px solid var(--primary);}
+.kpi-card .kpi-value{font-size:2rem;font-weight:700;color:var(--primary);}
+.kpi-card .kpi-label{font-size:.78rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
+.charts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;}
+.chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);}
+.chart-card h4{font-size:.88rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px;}
+.chart-card canvas{max-height:250px;}
+.rank-table{width:100%;font-size:.87rem;border-collapse:collapse;}
+.rank-table th{text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--secondary);font-size:.75rem;text-transform:uppercase;}
+.rank-table td{padding:7px 10px;border-bottom:1px solid var(--border);}
+.rank-table tr:last-child td{border-bottom:none;}
+.badge{display:inline-block;padding:2px 8px;border-radius:5px;font-size:.75rem;font-weight:600;}
+.badge-pf{background:#e3f0ff;color:#0b57d0;}
+.badge-pj{background:#fff4e0;color:#b36b00;}
+.badge-func{background:#e6f4ea;color:#1a6630;}
+.loading{text-align:center;padding:40px;color:var(--secondary);font-size:.95rem;}
+.spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@media(max-width:600px){.app-header .app-sub{display:none;}.tab-btn{padding:12px 14px;font-size:.85rem;}.tab-content{padding:14px;}.form-grid{grid-template-columns:1fr;}}
+</style>
+</head><body>
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-header">
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="8" y="30" width="48" height="22" rx="4" fill="rgba(255,255,255,0.25)"/>
+        <rect x="12" y="34" width="28" height="14" rx="2" fill="rgba(255,255,255,0.35)"/>
+        <circle cx="50" cy="42" r="6" fill="rgba(255,255,255,0.5)"/>
+        <circle cx="50" cy="42" r="3" fill="rgba(255,255,255,0.8)"/>
+        <rect x="28" y="20" width="8" height="14" rx="2" fill="rgba(255,255,255,0.45)"/>
+        <rect x="24" y="16" width="16" height="6" rx="2" fill="rgba(255,255,255,0.4)"/>
+        <line x1="32" y1="34" x2="32" y2="52" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+        <circle cx="32" cy="52" r="2" fill="rgba(255,255,255,0.7)"/>
+        <rect x="8" y="50" width="48" height="4" rx="2" fill="rgba(255,255,255,0.2)"/>
+      </svg>
+      <h1>BORDADOS</h1>
+      <p>Atendimentos do Setor de Bordados</p>
+    </div>
+    <div class="login-body">
+      <label for="selFilial">Filial</label>
+      <select id="selFilial">
+        <option value="">— Selecione a filial —</option>
+        <option value="gus">Garanhuns</option>
+        <option value="imb">Imbiribeira</option>
+        <option value="pal">Paralela</option>
+        <option value="tam">Tamarineira</option>
+        <option value="aju">Aracaju</option>
+        <option value="jpa">João Pessoa</option>
+        <option value="png">Ponta Negra</option>
+        <option value="cau">Caruaru</option>
+        <option value="bar">Barris</option>
+        <option value="corp">Corporativo (Adm)</option>
+      </select>
+      <label for="inpSenha">Senha</label>
+      <input type="password" id="inpSenha" placeholder="Digite sua senha" autocomplete="current-password"/>
+      <button class="btn-login" onclick="doLogin()">Entrar</button>
+      <span class="forgot-link" onclick="showForgot()">Esqueceu a senha?</span>
+      <div id="loginMsg" class="login-msg"></div>
+    </div>
+  </div>
+</div>
+
+<div id="changePwScreen" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+  <div class="changepw-card">
+    <div class="changepw-header"><h2>Trocar Senha</h2></div>
+    <div class="changepw-body">
+      <p>Primeiro acesso detectado. Defina uma nova senha para continuar (mín. 6 caracteres).</p>
+      <label>Nova Senha</label>
+      <input type="password" id="inpNovaSenha" placeholder="Nova senha"/>
+      <label>Confirmar Senha</label>
+      <input type="password" id="inpConfSenha" placeholder="Confirme a senha"/>
+      <button class="btn-changepw" onclick="doChangePw()">Salvar Senha</button>
+      <div id="changePwMsg"></div>
+    </div>
+  </div>
+</div>
+
+<div id="appScreen" style="display:none;flex-direction:column;min-height:100vh;">
+  <header class="app-header">
+    <svg viewBox="0 0 64 64" fill="none">
+      <rect x="8" y="30" width="48" height="22" rx="4" fill="rgba(255,255,255,0.25)"/>
+      <rect x="12" y="34" width="28" height="14" rx="2" fill="rgba(255,255,255,0.35)"/>
+      <circle cx="50" cy="42" r="6" fill="rgba(255,255,255,0.5)"/>
+      <circle cx="50" cy="42" r="3" fill="rgba(255,255,255,0.8)"/>
+      <rect x="28" y="20" width="8" height="14" rx="2" fill="rgba(255,255,255,0.45)"/>
+      <rect x="24" y="16" width="16" height="6" rx="2" fill="rgba(255,255,255,0.4)"/>
+      <line x1="32" y1="34" x2="32" y2="52" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+    </svg>
+    <span class="app-title">BORDADOS</span>
+    <span class="app-sub" id="headerSub"></span>
+    <span class="spacer"></span>
+    <button class="btn-sair" onclick="doLogout()">Sair</button>
+  </header>
+  <div class="tabs-bar">
+    <button class="tab-btn" id="tab-btn-1" onclick="showTab(1)">Novo Atendimento</button>
+    <button class="tab-btn" id="tab-btn-2" onclick="showTab(2)">Todos os Atendimentos</button>
+    <button class="tab-btn" id="tab-btn-3" onclick="showTab(3)">Consulta por CI</button>
+    <button class="tab-btn" id="tab-btn-4" onclick="showTab(4)">Dashboard</button>
+  </div>
+
+  <div class="tab-content" id="tab1">
+    <div class="card">
+      <h3>Dados do Atendimento</h3>
+      <div class="form-grid">
+        <div class="form-group" id="grp-filial-sel" style="display:none;">
+          <label>Filial (em nome de)</label>
+          <select id="frmFilialSel">
+            <option value="GUS">Garanhuns</option><option value="IMB">Imbiribeira</option>
+            <option value="PAL">Paralela</option><option value="TAM">Tamarineira</option>
+            <option value="AJU">Aracaju</option><option value="JPA">João Pessoa</option>
+            <option value="PNG">Ponta Negra</option><option value="CAU">Caruaru</option>
+            <option value="BAR">Barris</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Data Receb. *</label>
+          <input type="date" id="frmDataReceb" required/>
+        </div>
+        <div class="form-group">
+          <label>Atendente *</label>
+          <input type="text" id="frmAtendente" placeholder="Nome do atendente" required/>
+        </div>
+        <div class="form-group">
+          <label>Data Entrega *</label>
+          <input type="date" id="frmDataEntrega" required/>
+        </div>
+        <div class="form-group">
+          <label>Nome do Cliente *</label>
+          <input type="text" id="frmNomeCliente" placeholder="Nome completo" required/>
+        </div>
+        <div class="form-group">
+          <label>Nr da CI</label>
+          <input type="text" id="frmCi" placeholder="000000000000"/>
+        </div>
+        <div class="form-group">
+          <label>CPF / CNPJ</label>
+          <input type="text" id="frmCpf" placeholder="000.000.000-00"/>
+        </div>
+        <div class="form-group">
+          <label>Tipo Cliente</label>
+          <select id="frmTipoCli">
+            <option value="PF">PF (Pessoa Física)</option>
+            <option value="PJ">PJ (Pessoa Jurídica)</option>
+            <option value="FUNC">FUNC (Funcionário)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Toalhas a Bordar</h3>
+      <div class="toalhas-wrap">
+        <table class="toalhas-table" id="toalhasTable">
+          <thead><tr>
+            <th>Qtde</th><th>Cod. CI</th><th>Produto</th>
+            <th>Texto a Bordar</th><th>Cor da Linha</th><th>Fonte</th><th></th>
+          </tr></thead>
+          <tbody id="toalhasTbody"></tbody>
+        </table>
+      </div>
+      <button class="btn-add-row" onclick="addToalhaRow()">+ Adicionar toalha</button>
+      <div class="toalhas-counter" id="toalhasCounter">0 item(s) — 0 toalha(s)</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="submitAtendimento()">Confirmar Atendimento</button>
+      <button class="btn-secondary" onclick="clearForm()">Limpar</button>
+      <span id="formMsg" class="form-msg"></span>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab2">
+    <div class="cache-warn" id="cacheWarn">Exibindo dados do cache local (sem conexão com o servidor).</div>
+    <div class="card" style="padding:16px;">
+      <div class="table-toolbar">
+        <input type="text" id="searchInput" placeholder="Buscar por cliente, CI, CPF, atendente..." oninput="filterTable()"/>
+        <select id="filterFilialSel" style="display:none;" onchange="loadAtendimentos()">
+          <option value="CORP">Todas as Filiais</option>
+          <option value="GUS">Garanhuns</option><option value="IMB">Imbiribeira</option>
+          <option value="PAL">Paralela</option><option value="TAM">Tamarineira</option>
+          <option value="AJU">Aracaju</option><option value="JPA">João Pessoa</option>
+          <option value="PNG">Ponta Negra</option><option value="CAU">Caruaru</option>
+          <option value="BAR">Barris</option>
+        </select>
+        <button class="btn-reload" onclick="loadAtendimentos()">Atualizar</button>
+        <span class="records-count" id="recordsCount"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr>
+            <th>ID</th><th>Data Receb</th><th>Data Entrega</th><th>Atendente</th>
+            <th>Cliente</th><th>CI</th><th>CPF</th><th>Tipo</th>
+            <th>Toalhas</th><th>EPI</th><th>Filial</th><th>Registrado em</th>
+          </tr></thead>
+          <tbody id="atendimentosTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab3">
+    <div class="card">
+      <h3>Consulta por Número de CI</h3>
+      <div class="ci-search-row">
+        <input type="text" id="ciInput" placeholder="Digite o número da CI..."/>
+        <button class="btn-primary" onclick="consultarCI()">Consultar</button>
+      </div>
+      <div class="ci-results" id="ciResults"></div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab4">
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="charts-grid" id="chartsGrid"></div>
+  </div>
+</div>
+<script>
+// ─── CONSTANTES ───────────────────────────────────────────────────────────────
+const DEFAULT_PW = 'bordados2026';
+const RESET_CODE = 'bordados2026';
+const CORP_PW_KEY = 'bor_pw_corp';
+const FILIAIS = {
+  gus:'Garanhuns',imb:'Imbiribeira',pal:'Paralela',tam:'Tamarineira',
+  aju:'Aracaju',jpa:'João Pessoa',png:'Ponta Negra',cau:'Caruaru',bar:'Barris',corp:'Corporativo'
+};
+
+// Inicializar senha do corp se não existir
+if (!localStorage.getItem(CORP_PW_KEY)) {
+  localStorage.setItem(CORP_PW_KEY, '123456');
+}
+
+let currentFilial = null;
+let allAtendimentos = [];
+let charts = {};
+
+// ─── DATAS ────────────────────────────────────────────────────────────────────
+function todayISO() {
+  const d = new Date(); return d.toISOString().split('T')[0];
+}
+function addDays(iso, n) {
+  const d = new Date(iso); d.setDate(d.getDate() + n);
+  return d.toISOString().split('T')[0];
+}
+function isoToBR(iso) {
+  if (!iso) return '';
+  const p = iso.split('-'); if (p.length !== 3) return iso;
+  return p[2]+'/'+p[1]+'/'+p[0];
+}
+function brToISO(br) {
+  if (!br) return '';
+  const p = br.split('/'); if (p.length !== 3) return br;
+  return p[2]+'-'+p[1]+'-'+p[0];
+}
+function diffDays(d1, d2) {
+  const a = new Date(brToISO(d1)), b = new Date(brToISO(d2));
+  return Math.round((b-a)/(1000*60*60*24));
+}
+
+// ─── AUTH ─────────────────────────────────────────────────────────────────────
+function getPw(filial) {
+  const key = 'bor_pw_' + filial;
+  return localStorage.getItem(key) || DEFAULT_PW;
+}
+function setPw(filial, pw) {
+  localStorage.setItem('bor_pw_' + filial, pw);
+}
+
+function doLogin() {
+  const filial = document.getElementById('selFilial').value;
+  const senha = document.getElementById('inpSenha').value;
+  const msg = document.getElementById('loginMsg');
+  msg.className = 'login-msg';
+
+  if (!filial) { msg.textContent = 'Selecione uma filial.'; msg.className = 'login-msg error'; return; }
+  if (!senha) { msg.textContent = 'Digite a senha.'; msg.className = 'login-msg error'; return; }
+
+  const saved = getPw(filial);
+  if (senha !== saved) { msg.textContent = 'Senha incorreta.'; msg.className = 'login-msg error'; return; }
+
+  currentFilial = filial;
+
+  // Corp não precisa trocar senha, e se DEFAULT_PW não muda para corp
+  if (filial !== 'corp' && saved === DEFAULT_PW) {
+    // Forçar troca de senha
+    document.getElementById('loginScreen').style.display = 'none';
+    const cpw = document.getElementById('changePwScreen');
+    cpw.style.display = 'flex';
+    return;
+  }
+
+  enterApp();
+}
+
+function doChangePw() {
+  const nova = document.getElementById('inpNovaSenha').value;
+  const conf = document.getElementById('inpConfSenha').value;
+  const msg = document.getElementById('changePwMsg');
+  if (nova.length < 6) { msg.textContent = 'Mínimo 6 caracteres.'; return; }
+  if (nova !== conf) { msg.textContent = 'As senhas não coincidem.'; return; }
+  setPw(currentFilial, nova);
+  msg.textContent = '';
+  document.getElementById('changePwScreen').style.display = 'none';
+  enterApp();
+}
+
+function showForgot() {
+  const code = prompt('Digite o código de reset:');
+  if (code === RESET_CODE) {
+    const filial = document.getElementById('selFilial').value;
+    if (!filial) { alert('Selecione a filial primeiro.'); return; }
+    setPw(filial, DEFAULT_PW);
+    alert('Senha resetada para o padrão. Use "' + DEFAULT_PW + '" para entrar.');
+  } else {
+    alert('Código incorreto.');
+  }
+}
+
+function enterApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('changePwScreen').style.display = 'none';
+  const app = document.getElementById('appScreen');
+  app.style.display = 'flex';
+
+  const label = FILIAIS[currentFilial] || currentFilial.toUpperCase();
+  document.getElementById('headerSub').textContent = label.toUpperCase() + ' — Setor de Bordados';
+
+  // Mostrar select de filial para corp
+  if (currentFilial === 'corp') {
+    document.getElementById('grp-filial-sel').style.display = 'flex';
+    document.getElementById('filterFilialSel').style.display = 'block';
+    showTab(2);
+  } else {
+    document.getElementById('grp-filial-sel').style.display = 'none';
+    document.getElementById('filterFilialSel').style.display = 'none';
+    showTab(1);
+  }
+
+  initForm();
+  loadAtendimentos();
+}
+
+function doLogout() {
+  currentFilial = null;
+  allAtendimentos = [];
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('selFilial').value = '';
+  document.getElementById('inpSenha').value = '';
+  document.getElementById('loginMsg').className = 'login-msg';
+}
+
+// ─── TABS ─────────────────────────────────────────────────────────────────────
+function showTab(n) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab'+n).classList.add('active');
+  document.getElementById('tab-btn-'+n).classList.add('active');
+  if (n === 4) renderDashboard();
+}
+
+// ─── FORM (ABA 1) ─────────────────────────────────────────────────────────────
+function initForm() {
+  document.getElementById('frmDataReceb').value = todayISO();
+  document.getElementById('frmDataEntrega').value = addDays(todayISO(), 3);
+  document.getElementById('toalhasTbody').innerHTML = '';
+  updateCounter();
+  addToalhaRow();
+}
+
+function addToalhaRow() {
+  const tbody = document.getElementById('toalhasTbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="number" value="1" min="1" style="width:60px" oninput="updateCounter()"/></td>
+    <td><input type="text" placeholder="CI"/></td>
+    <td><select>
+      <option>Toalha de Corpo</option><option>Toalha de Rosto</option>
+      <option>Toalha de Maos</option><option>Jogo de Toalhas</option>
+      <option>Guardanapos</option><option>Toalha lavabo</option>
+      <option>Pano Americano</option>
+    </select></td>
+    <td><input type="text" placeholder="Texto a bordar"/></td>
+    <td><input type="text" placeholder="Cor da linha"/></td>
+    <td><input type="text" placeholder="Fonte"/></td>
+    <td><button class="btn-rm-row" onclick="rmRow(this)">X</button></td>
+  `;
+  tbody.appendChild(tr);
+  updateCounter();
+}
+
+function rmRow(btn) {
+  btn.closest('tr').remove();
+  updateCounter();
+}
+
+function updateCounter() {
+  const rows = document.querySelectorAll('#toalhasTbody tr');
+  let totalQtde = 0;
+  rows.forEach(r => {
+    const q = parseInt(r.querySelector('input[type=number]')?.value) || 0;
+    totalQtde += q;
+  });
+  document.getElementById('toalhasCounter').textContent = rows.length + ' item(s) — ' + totalQtde + ' toalha(s)';
+}
+
+function getToalhas() {
+  const rows = document.querySelectorAll('#toalhasTbody tr');
+  return Array.from(rows).map(r => {
+    const inputs = r.querySelectorAll('input');
+    const sel = r.querySelector('select');
+    return {
+      qtde: parseInt(inputs[0]?.value) || 1,
+      ci: inputs[1]?.value || '',
+      produto: sel?.value || '',
+      texto: inputs[2]?.value || '',
+      corLinha: inputs[3]?.value || '',
+      fonte: inputs[4]?.value || ''
+    };
+  });
+}
+
+function clearForm() {
+  initForm();
+  document.getElementById('frmAtendente').value = '';
+  document.getElementById('frmNomeCliente').value = '';
+  document.getElementById('frmCi').value = '';
+  document.getElementById('frmCpf').value = '';
+  showMsg('formMsg', '', '');
+}
+
+function showMsg(id, type, text) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'form-msg' + (type ? ' ' + type : '');
+}
+
+async function submitAtendimento() {
+  const dataReceb = document.getElementById('frmDataReceb').value;
+  const atendente = document.getElementById('frmAtendente').value.trim();
+  const dataEntrega = document.getElementById('frmDataEntrega').value;
+  const nomeCliente = document.getElementById('frmNomeCliente').value.trim();
+
+  if (!dataReceb) { showMsg('formMsg','error','Informe a data de recebimento.'); return; }
+  if (!atendente) { showMsg('formMsg','error','Informe o atendente.'); return; }
+  if (!dataEntrega) { showMsg('formMsg','error','Informe a data de entrega.'); return; }
+  if (!nomeCliente) { showMsg('formMsg','error','Informe o nome do cliente.'); return; }
+
+  const filial = currentFilial === 'corp'
+    ? document.getElementById('frmFilialSel').value
+    : currentFilial.toUpperCase();
+
+  const toalhas = getToalhas();
+  const body = {
+    filial, atendente, nomeCliente,
+    ci: document.getElementById('frmCi').value,
+    cpf: document.getElementById('frmCpf').value,
+    tipoCli: document.getElementById('frmTipoCli').value,
+    dataReceb: isoToBR(dataReceb),
+    dataEntrega: isoToBR(dataEntrega),
+    toalhas, produto: '', qtde: toalhas.reduce((s,t)=>s+t.qtde,0),
+    corLinha: '', fonte: '', epi: false, motivoEpi: ''
+  };
+
+  showMsg('formMsg','','Salvando...');
+  try {
+    const resp = await fetch('/api/atendimentos', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    // Invalidar cache
+    localStorage.removeItem('bor_cache_' + (currentFilial==='corp'?'corp':currentFilial));
+    showMsg('formMsg','success','Atendimento registrado com sucesso!');
+    clearForm();
+    allAtendimentos = [];
+  } catch(e) {
+    showMsg('formMsg','error','Erro: ' + e.message);
+  }
+}
+
+// ─── ABA 2 — TODOS OS ATENDIMENTOS ───────────────────────────────────────────
+async function loadAtendimentos() {
+  const tbody = document.getElementById('atendimentosTbody');
+  tbody.innerHTML = '<tr><td colspan="12" class="loading"><span class="spinner"></span>Carregando...</td></tr>';
+
+  let filialParam;
+  if (currentFilial === 'corp') {
+    const sel = document.getElementById('filterFilialSel').value;
+    filialParam = sel || 'CORP';
+  } else {
+    filialParam = currentFilial;
+  }
+
+  const cacheKey = 'bor_cache_' + filialParam.toLowerCase();
+
+  try {
+    const resp = await fetch('/api/atendimentos?filial=' + filialParam);
+    if (!resp.ok) throw new Error(resp.status);
+    const data = await resp.json();
+    allAtendimentos = data;
+    localStorage.setItem(cacheKey, JSON.stringify(data));
+    document.getElementById('cacheWarn').style.display = 'none';
+  } catch(e) {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      allAtendimentos = JSON.parse(cached);
+      document.getElementById('cacheWarn').style.display = 'block';
+    } else {
+      tbody.innerHTML = '<tr><td colspan="12" class="no-results">Erro ao carregar dados.</td></tr>';
+      return;
+    }
+  }
+
+  renderTable(allAtendimentos);
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('atendimentosTbody');
+  document.getElementById('recordsCount').textContent = data.length + ' registro(s)';
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="12" class="no-results">Nenhum atendimento encontrado.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.map(a => {
+    const toalhas = Array.isArray(a.toalhas) ? a.toalhas : [];
+    const toalhaStr = toalhas.map(t => (t.qtde||1)+'x '+t.produto).join(', ') || '-';
+    const createdAt = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR') : '';
+    const tipoBadge = a.tipo_cli==='PF'?'badge-pf':a.tipo_cli==='PJ'?'badge-pj':'badge-func';
+    return `<tr>
+      <td>${a.id}</td>
+      <td>${a.data_receb||''}</td>
+      <td>${a.data_entrega||''}</td>
+      <td>${a.atendente||''}</td>
+      <td>${a.nome_cliente||''}</td>
+      <td>${a.ci||''}</td>
+      <td>${a.cpf||''}</td>
+      <td><span class="badge ${tipoBadge}">${a.tipo_cli||''}</span></td>
+      <td style="max-width:200px;font-size:.8rem">${toalhaStr}</td>
+      <td>${a.epi?'Sim':'Não'}</td>
+      <td>${a.filial||''}</td>
+      <td>${createdAt}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterTable() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  if (!q) { renderTable(allAtendimentos); return; }
+  const filtered = allAtendimentos.filter(a =>
+    (a.nome_cliente||'').toLowerCase().includes(q) ||
+    (a.ci||'').toLowerCase().includes(q) ||
+    (a.cpf||'').toLowerCase().includes(q) ||
+    (a.atendente||'').toLowerCase().includes(q)
+  );
+  renderTable(filtered);
+}
+
+// ─── ABA 3 — CONSULTA CI ─────────────────────────────────────────────────────
+async function consultarCI() {
+  const ci = document.getElementById('ciInput').value.trim();
+  const res = document.getElementById('ciResults');
+  if (!ci) { res.innerHTML = '<p class="no-results">Digite um número de CI.</p>'; return; }
+  res.innerHTML = '<div class="loading"><span class="spinner"></span>Buscando...</div>';
+
+  try {
+    const filialParam = currentFilial === 'corp' ? 'CORP' : currentFilial;
+    const resp = await fetch('/api/atendimentos?filial=' + filialParam);
+    const data = await resp.json();
+    const found = data.filter(a => (a.ci||'').includes(ci));
+    if (!found.length) { res.innerHTML = '<p class="no-results">Nenhum atendimento encontrado para a CI: ' + ci + '</p>'; return; }
+    res.innerHTML = found.map(a => {
+      const toalhas = Array.isArray(a.toalhas) ? a.toalhas : [];
+      return `<div class="ci-card">
+        <div class="ci-card-header">
+          <strong>Atendimento #${a.id}</strong>
+          <span class="badge-filial">${a.filial}</span>
+        </div>
+        <div class="ci-card-meta">
+          <span><strong>Receb:</strong> ${a.data_receb}</span>
+          <span><strong>Entrega:</strong> ${a.data_entrega}</span>
+          <span><strong>Atendente:</strong> ${a.atendente}</span>
+          <span><strong>Cliente:</strong> ${a.nome_cliente}</span>
+          <span><strong>Tipo:</strong> ${a.tipo_cli}</span>
+        </div>
+        <div class="ci-toalhas">
+          ${toalhas.map(t=>`<div class="ci-toalha-item">
+            <strong>${t.qtde}x ${t.produto}</strong> — Texto: ${t.texto||'-'} | Cor: ${t.corLinha||'-'} | Fonte: ${t.fonte||'-'}
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    res.innerHTML = '<p class="no-results">Erro ao buscar: ' + e.message + '</p>';
+  }
+}
+
+// ─── ABA 4 — DASHBOARD ───────────────────────────────────────────────────────
+function destroyCharts() {
+  Object.values(charts).forEach(c => { try { c.destroy(); } catch(e){} });
+  charts = {};
+}
+
+async function renderDashboard() {
+  const kpiGrid = document.getElementById('kpiGrid');
+  const chartsGrid = document.getElementById('chartsGrid');
+  kpiGrid.innerHTML = '<div class="loading"><span class="spinner"></span>Carregando dashboard...</div>';
+  chartsGrid.innerHTML = '';
+  destroyCharts();
+
+  let data = allAtendimentos;
+  if (!data.length) {
+    try {
+      const filialParam = currentFilial === 'corp' ? 'CORP' : currentFilial;
+      const resp = await fetch('/api/atendimentos?filial=' + filialParam);
+      data = await resp.json();
+      allAtendimentos = data;
+    } catch(e) { kpiGrid.innerHTML = '<p class="no-results">Erro ao carregar dados.</p>'; return; }
+  }
+
+  // ── KPIs ──
+  const totalAtend = data.length;
+  const prazos = data.filter(a=>a.data_receb&&a.data_entrega).map(a=>diffDays(a.data_receb,a.data_entrega));
+  const prazoMed = prazos.length ? (prazos.reduce((s,v)=>s+v,0)/prazos.length).toFixed(1) : '-';
+
+  kpiGrid.innerHTML = `
+    <div class="kpi-card"><div class="kpi-value">${totalAtend}</div><div class="kpi-label">Total de Atendimentos</div></div>
+    <div class="kpi-card"><div class="kpi-value">${prazoMed}</div><div class="kpi-label">Prazo Médio (dias)</div></div>
+  `;
+
+  chartsGrid.innerHTML = '';
+
+  // ── Gráfico por filial (apenas corp) ──
+  if (currentFilial === 'corp') {
+    const byFilial = {};
+    data.forEach(a => { const f = a.filial||'?'; byFilial[f] = (byFilial[f]||0)+1; });
+    chartsGrid.innerHTML += '<div class="chart-card" id="cc-filial"><h4>Atendimentos por Filial</h4><canvas id="chartFilial"></canvas></div>';
+    setTimeout(()=>{
+      const ctx = document.getElementById('chartFilial');
+      if(ctx) charts.filial = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFilial),datasets:[{label:'Atendimentos',data:Object.values(byFilial),backgroundColor:'#a01520'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+    },50);
+  }
+
+  // ── Evolução semanal ──
+  const bySemana = {};
+  data.forEach(a => {
+    const dr = brToISO(a.data_receb||'');
+    if (!dr) return;
+    const d = new Date(dr);
+    const ano = d.getFullYear();
+    const sem = Math.ceil((d - new Date(ano,0,1))/(7*24*3600*1000));
+    const k = ano+'-S'+String(sem).padStart(2,'0');
+    bySemana[k] = (bySemana[k]||0)+1;
+  });
+  const semKeys = Object.keys(bySemana).sort();
+  chartsGrid.innerHTML += '<div class="chart-card"><h4>Evolução Semanal</h4><canvas id="chartSemanal"></canvas></div>';
+  setTimeout(()=>{
+    const ctx = document.getElementById('chartSemanal');
+    if(ctx) charts.semanal = new Chart(ctx,{type:'line',data:{labels:semKeys,datasets:[{label:'Atend/semana',data:semKeys.map(k=>bySemana[k]),borderColor:'#a01520',backgroundColor:'rgba(160,21,32,.1)',fill:true,tension:.3}]},options:{responsive:true}});
+  },50);
+
+  // ── Produto mais comum ──
+  const byProd = {};
+  data.forEach(a => {
+    const toalhas = Array.isArray(a.toalhas)?a.toalhas:[];
+    toalhas.forEach(t => { const p=t.produto||'?'; byProd[p]=(byProd[p]||0)+t.qtde; });
+  });
+  chartsGrid.innerHTML += '<div class="chart-card"><h4>Produto Bordado Mais Comum</h4><canvas id="chartProd"></canvas></div>';
+  setTimeout(()=>{
+    const ctx = document.getElementById('chartProd');
+    if(ctx) charts.prod = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byProd),datasets:[{data:Object.values(byProd),backgroundColor:['#a01520','#c0392b','#e74c3c','#f1948a','#f5b7b1','#fadbd8','#922b21']}]},options:{responsive:true}});
+  },50);
+
+  // ── Tipo de cliente ──
+  const byTipo = {PF:0,PJ:0,FUNC:0};
+  data.forEach(a => { if(byTipo[a.tipo_cli]!==undefined) byTipo[a.tipo_cli]++; });
+  chartsGrid.innerHTML += '<div class="chart-card"><h4>Tipo de Cliente</h4><canvas id="chartTipo"></canvas></div>';
+  setTimeout(()=>{
+    const ctx = document.getElementById('chartTipo');
+    if(ctx) charts.tipo = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byTipo),datasets:[{data:Object.values(byTipo),backgroundColor:['#0b57d0','#b36b00','#1a6630']}]},options:{responsive:true}});
+  },50);
+
+  // ── Fonte mais usada ──
+  const byFonte = {};
+  data.forEach(a => {
+    const toalhas = Array.isArray(a.toalhas)?a.toalhas:[];
+    toalhas.forEach(t => { const f=t.fonte||'?'; if(f) byFonte[f]=(byFonte[f]||0)+1; });
+  });
+  chartsGrid.innerHTML += '<div class="chart-card"><h4>Estilo de Fonte Mais Usado</h4><canvas id="chartFonte"></canvas></div>';
+  setTimeout(()=>{
+    const ctx = document.getElementById('chartFonte');
+    if(ctx) charts.fonte = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFonte),datasets:[{label:'Usos',data:Object.values(byFonte),backgroundColor:'#7a0f17'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+  },50);
+
+  // ── Ranking de atendentes ──
+  const byAtend = {};
+  data.forEach(a => { const n=a.atendente||'?'; byAtend[n]=(byAtend[n]||0)+1; });
+  const rank = Object.entries(byAtend).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  chartsGrid.innerHTML += `<div class="chart-card"><h4>Ranking de Atendentes</h4>
+    <table class="rank-table"><thead><tr><th>#</th><th>Atendente</th><th>Qtde</th></tr></thead>
+    <tbody>${rank.map((r,i)=>`<tr><td>${i+1}</td><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+// ─── ENTER KEY ─────────────────────────────────────────────────────────────────
+document.getElementById('inpSenha').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('ciInput')?.addEventListener('keydown', e => { if(e.key==='Enter') consultarCI(); });
+</script>
+</body>
+</html>
