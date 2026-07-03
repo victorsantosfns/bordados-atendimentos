@@ -107,6 +107,60 @@ app.post('/api/atendimentos', async (req, res) => {
   }
 });
 
+app.put('/api/atendimentos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      filial, atendente, nomeCliente, ci, cpf, tipoCli,
+      dataReceb, dataEntrega, toalhas, produto, qtde,
+      corLinha, fonte, epi, motivoEpi
+    } = req.body;
+    const result = await pool.query(
+      `UPDATE atendimentos SET
+      filial=$1, atendente=$2, nome_cliente=$3, ci=$4, cpf=$5, tipo_cli=$6,
+      data_receb=$7, data_entrega=$8, toalhas=$9::jsonb, produto=$10, qtde=$11,
+      cor_linha=$12, fonte=$13, epi=$14, motivo_epi=$15
+      WHERE id=$16
+      RETURNING *`,
+      [
+        (filial || '').toUpperCase(),
+        atendente || '',
+        nomeCliente || '',
+        ci || '',
+        cpf || '',
+        tipoCli || '',
+        dataReceb || '',
+        dataEntrega || '',
+        JSON.stringify(toalhas || []),
+        produto || '',
+        parseInt(qtde) || 0,
+        corLinha || '',
+        fonte || '',
+        epi === true || epi === 'true',
+        motivoEpi || '',
+        id
+        ]
+      );
+    if (!result.rows.length) return res.status(404).json({ error: 'Atendimento nao encontrado.' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('PUT error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/atendimentos/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('DELETE FROM atendimentos WHERE id=$1 RETURNING id', [id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Atendimento nao encontrado.' });
+    res.json({ success: true, id: result.rows[0].id });
+  } catch (err) {
+    console.error('DELETE error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
