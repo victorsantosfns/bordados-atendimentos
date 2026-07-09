@@ -236,7 +236,6 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
           <select id="frmTipoCli">
             <option value="PF">PF (Pessoa Física)</option>
             <option value="PJ">PJ (Pessoa Jurídica)</option>
-            <option value="FUNC">FUNC (Funcionário)</option>
           </select>
         </div>
       </div>
@@ -845,7 +844,7 @@ async function renderDashboard() {
   },50);
 
   // ── Tipo de cliente ──
-  const byTipo = {PF:0,PJ:0,FUNC:0};
+  const byTipo = {PF:0,PJ:0};
   data.forEach(a => { if(byTipo[a.tipo_cli]!==undefined) byTipo[a.tipo_cli]++; });
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Tipo de Cliente</h4><canvas id="chartTipo"></canvas></div>';
   setTimeout(()=>{
