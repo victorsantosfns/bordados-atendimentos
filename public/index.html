@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Bordados — Atendimentos do Setor de Bordados</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{--primary:#a01520;--primary-dark:#7a0f17;--bg:#f0f0f0;--card:#ffffff;--text:#333333;--border:#dddddd;--secondary:#6c757d;--success:#28a745;--danger:#dc3545;}
@@ -126,6 +128,9 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
 .spinner{display:inline-block;width:28px;height:28px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;margin-right:8px;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg);}}
 @media(max-width:600px){.app-header .app-sub{display:none;}.tab-btn{padding:12px 14px;font-size:.85rem;}.tab-content{padding:14px;}.form-grid{grid-template-columns:1fr;}}
+.chart-card canvas{cursor:pointer;}
+.rank-table tbody tr{cursor:pointer;}
+.rank-table tbody tr:hover td{background:#faf0f0;}
 </style>
 </head><body>
 <div id="loginScreen">
@@ -187,6 +192,7 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
     <button class="tab-btn" id="tab-btn-2" onclick="showTab(2)">Todos os Atendimentos</button>
     <button class="tab-btn" id="tab-btn-3" onclick="showTab(3)">Consulta por CI</button>
     <button class="tab-btn" id="tab-btn-4" onclick="showTab(4)">Dashboard</button>
+  <button class="tab-btn" id="tab-btn-5" onclick="showTab(5)">Colaboradores</button>
   </div>
 
   <div class="tab-content" id="tab1">
@@ -199,7 +205,7 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
       <div class="form-grid">
         <div class="form-group" id="grp-filial-sel" style="display:none;">
           <label>Filial (em nome de)</label>
-          <select id="frmFilialSel">
+          <select id="frmFilialSel" onchange="populateAtendenteSelect()">
             <option value="GUS">Garanhuns</option><option value="IMB">Imbiribeira</option>
             <option value="PAL">Paralela</option><option value="TAM">Tamarineira</option>
             <option value="AJU">Aracaju</option><option value="JPA">João Pessoa</option>
@@ -213,7 +219,7 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
         </div>
         <div class="form-group">
           <label>Atendente *</label>
-          <input type="text" id="frmAtendente" placeholder="Nome do atendente" required/>
+          <select id="frmAtendente" required><option value="">— Selecione o atendente —</option></select>
         </div>
         <div class="form-group">
           <label>Data Entrega *</label>
@@ -275,6 +281,8 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
           <option value="BAR">Barris</option>
         </select>
         <button class="btn-reload" onclick="loadAtendimentos()">Atualizar</button>
+        <button type="button" class="btn-login" style="width:auto;padding:8px 16px;" onclick="exportAtendimentosCSV()">Exportar Excel</button>
+        <button type="button" class="btn-login" style="width:auto;padding:8px 16px;" onclick="exportAtendimentosPDF()">Exportar PDF</button>
         <span class="records-count" id="recordsCount"></span>
       </div>
       <div class="table-wrap">
@@ -304,6 +312,48 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
   <div class="tab-content" id="tab4">
     <div class="kpi-grid" id="kpiGrid"></div>
     <div class="charts-grid" id="chartsGrid"></div>
+  </div>
+
+  <div class="tab-content" id="tab5">
+    <div class="card" style="padding:16px;max-width:640px;margin-bottom:16px;">
+      <h3 style="margin-bottom:14px;">Cadastro de Colaborador</h3>
+      <div class="form-group" id="grp-colab-filial-sel" style="display:none;">
+        <label>Filial</label>
+        <select id="colabFilialSel">
+          <option value="GUS">Garanhuns</option><option value="IMB">Imbiribeira</option>
+          <option value="PAL">Paralela</option><option value="TAM">Tamarineira</option>
+          <option value="AJU">Aracaju</option><option value="JPA">João Pessoa</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Nome Completo *</label>
+        <input type="text" id="colabNome" placeholder="Nome do colaborador"/>
+      </div>
+      <div class="form-group">
+        <label>Cargo / Função</label>
+        <input type="text" id="colabCargo" placeholder="Cargo"/>
+      </div>
+      <div class="form-group">
+        <label>Telefone</label>
+        <input type="text" id="colabTelefone" placeholder="Telefone"/>
+      </div>
+      <div id="colabFormMsg"></div>
+      <button type="button" class="btn-login" style="width:auto;padding:10px 20px;" onclick="submitColaborador()">Salvar Colaborador</button>
+      <button type="button" class="btn-login" style="width:auto;padding:10px 20px;background:var(--secondary);display:none;" id="btnCancelColab" onclick="cancelarEdicaoColab()">Cancelar Edição</button>
+    </div>
+    <div class="card" style="padding:16px;">
+      <div class="table-toolbar">
+        <button type="button" class="btn-login" style="width:auto;padding:8px 16px;" onclick="exportColaboradoresCSV()">Exportar Excel</button>
+        <button type="button" class="btn-login" style="width:auto;padding:8px 16px;" onclick="exportColaboradoresPDF()">Exportar PDF</button>
+        <span class="records-count" id="colabRecordsCount"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Nome</th><th>Cargo</th><th>Telefone</th><th>Filial</th><th>Ações</th></tr></thead>
+          <tbody id="colaboradoresTbody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 <script>
@@ -422,15 +472,18 @@ function enterApp() {
   if (currentFilial === 'corp') {
     document.getElementById('grp-filial-sel').style.display = 'flex';
     document.getElementById('filterFilialSel').style.display = 'block';
+    document.getElementById('grp-colab-filial-sel').style.display = 'flex';
     showTab(2);
   } else {
     document.getElementById('grp-filial-sel').style.display = 'none';
     document.getElementById('filterFilialSel').style.display = 'none';
+    document.getElementById('grp-colab-filial-sel').style.display = 'none';
     showTab(1);
   }
 
   initForm();
   loadAtendimentos();
+  loadColaboradores();
 }
 
 function doLogout() {
@@ -450,6 +503,7 @@ function showTab(n) {
   document.getElementById('tab'+n).classList.add('active');
   document.getElementById('tab-btn-'+n).classList.add('active');
   if (n === 4) renderDashboard();
+  if (n === 5) loadColaboradores();
 }
 
 // ─── FORM (ABA 1) ─────────────────────────────────────────────────────────────
@@ -459,6 +513,20 @@ function initForm() {
   document.getElementById('toalhasTbody').innerHTML = '';
   updateCounter();
   addToalhaRow();
+}
+
+const CORES_DISPONIVEIS = ['Branca','Preta','Cinza','Cinza Claro','Cinza Chumbo','Bege','Creme','Marfim','Azul','Azul Claro','Azul Marinho','Azul Royal','Azul Turquesa','Verde','Verde Claro','Verde Escuro','Verde Água','Verde Militar','Amarela','Amarelo Ouro','Laranja','Vermelha','Vinho','Bordô','Rosa','Rosa Claro','Rosa Pink','Roxa','Lilás','Marrom'];
+function coresOptionsHtml(selected) {
+  let html = '<option value="">— Selecione —</option>';
+  let found = false;
+  CORES_DISPONIVEIS.forEach(c => {
+    if (c === selected) { found = true; html += '<option selected>' + c + '</option>'; }
+    else { html += '<option>' + c + '</option>'; }
+  });
+  if (selected && !found) {
+    html += '<option value="' + selected + '" selected>' + selected + ' (personalizada)</option>';
+  }
+  return html;
 }
 
 function addToalhaRow(data) {
@@ -472,7 +540,7 @@ function addToalhaRow(data) {
   const textoVal = esc(d.texto || '');
   const corLinhaVal = esc(d.corLinha || '');
   const fonteVal = esc(d.fonte || '');
-  const opcoes = ['Toalha de Corpo','Toalha de Rosto','Toalha de Maos','Jogo de Toalhas','Guardanapos','Toalha lavabo','Pano Americano'];
+  const opcoes = ['Toalha de Corpo','Toalha de Rosto','Toalha de Maos','Jogo de Toalhas','Toalha lavabo'];
   const opcoesHtml = opcoes.map(o => '<option' + (o === produtoVal ? ' selected' : '') + '>' + o + '</option>').join('');
   tr.innerHTML = `
   <td><div class="qtde-stepper">
@@ -482,9 +550,9 @@ function addToalhaRow(data) {
   </div></td>
   <td><input type="text" placeholder="CI" value="${ciVal}"/></td>
   <td><select>${opcoesHtml}</select></td>
-  <td><input type="text" placeholder="Cor da toalha" value="${corToalhaVal}"/></td>
+  <td><select>${coresOptionsHtml(corToalhaVal)}</select></td>
   <td><input type="text" placeholder="Texto a bordar" value="${textoVal}"/></td>
-  <td><input type="text" placeholder="Cor da linha" value="${corLinhaVal}"/></td>
+  <td><select>${coresOptionsHtml(corLinhaVal)}</select></td>
   <td><input type="text" placeholder="Fonte" value="${fonteVal}"/></td>
   <td><button class="btn-rm-row" onclick="rmRow(this)">X</button></td>
   `;
@@ -511,15 +579,15 @@ function getToalhas() {
   const rows = document.querySelectorAll('#toalhasTbody tr');
   return Array.from(rows).map(r => {
     const inputs = r.querySelectorAll('input');
-    const sel = r.querySelector('select');
+    const sels = r.querySelectorAll('select');
     return {
 qtde: parseInt(inputs[0]?.value) || 1,
       ci: inputs[1]?.value || '',
-      produto: sel?.value || '',
-      corToalha: inputs[2]?.value || '',
-      texto: inputs[3]?.value || '',
-      corLinha: inputs[4]?.value || '',
-      fonte: inputs[5]?.value || ''
+      produto: sels[0]?.value || '',
+      corToalha: sels[1]?.value || '',
+      texto: inputs[2]?.value || '',
+      corLinha: sels[2]?.value || '',
+      fonte: inputs[3]?.value || ''
     };
   });
 }
@@ -679,7 +747,7 @@ function renderTable(data) {
     editingFilial = a.filial;
 
     document.getElementById('frmDataReceb').value = brToISO(a.data_receb);
-    document.getElementById('frmAtendente').value = a.atendente || '';
+    populateAtendenteSelect(a.filial, a.atendente || '');
     document.getElementById('frmDataEntrega').value = brToISO(a.data_entrega);
     document.getElementById('frmNomeCliente').value = a.nome_cliente || '';
     document.getElementById('frmCi').value = a.ci || '';
@@ -723,7 +791,10 @@ function filterTable() {
     (a.nome_cliente||'').toLowerCase().includes(q) ||
     (a.ci||'').toLowerCase().includes(q) ||
     (a.cpf||'').toLowerCase().includes(q) ||
-    (a.atendente||'').toLowerCase().includes(q)
+    (a.atendente||'').toLowerCase().includes(q) ||
+    (a.filial||'').toLowerCase().includes(q) ||
+    (a.tipo_cli||'').toLowerCase().includes(q) ||
+    (a.toalhas||[]).some(tt => (tt.produto||'').toLowerCase().includes(q) || (tt.corToalha||'').toLowerCase().includes(q) || (tt.corLinha||'').toLowerCase().includes(q) || (tt.fonte||'').toLowerCase().includes(q))
   );
   renderTable(filtered);
 }
@@ -773,7 +844,7 @@ function destroyCharts() {
   charts = {};
 }
 
-async function renderDashboard() {
+async function renderDashboardOriginal() {
   const kpiGrid = document.getElementById('kpiGrid');
   const chartsGrid = document.getElementById('chartsGrid');
   kpiGrid.innerHTML = '<div class="loading"><span class="spinner"></span>Carregando dashboard...</div>';
@@ -877,6 +948,258 @@ async function renderDashboard() {
 // ─── ENTER KEY ─────────────────────────────────────────────────────────────────
 document.getElementById('inpSenha').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 document.getElementById('ciInput')?.addEventListener('keydown', e => { if(e.key==='Enter') consultarCI(); });
+
+
+function loadColaboradores() {
+  var filialParam = (currentFilial === 'corp') ? 'CORP' : (currentFilial||'').toUpperCase();
+  return fetch('/api/colaboradores?filial=' + filialParam).then(function(resp){
+    if (resp.ok) return resp.json();
+    return [];
+  }).catch(function(){ return []; }).then(function(data){
+    window.__colaboradores = data || [];
+    renderColaboradoresTable();
+    populateAtendenteSelect();
+  });
+}
+
+function renderColaboradoresTable() {
+  var tbody = document.getElementById('colaboradoresTbody');
+  if (!tbody) return;
+  var list = window.__colaboradores || [];
+  var html = '';
+  for (var i=0;i<list.length;i++) {
+    var c = list[i];
+    html += '<tr><td>' + esc(c.nome) + '</td><td>' + esc(c.cargo||'') + '</td><td>' + esc(c.telefone||'') + '</td><td>' + esc(c.filial||'') + '</td><td>'
+      + '<button class="btn-rm-row" style="background:var(--primary);margin-right:6px;" onclick="editarColaborador(' + c.id + ')">Editar</button>'
+      + '<button class="btn-rm-row" onclick="excluirColaborador(' + c.id + ')">Excluir</button></td></tr>';
+  }
+  tbody.innerHTML = html;
+  var rc = document.getElementById('colabRecordsCount');
+  if (rc) rc.textContent = list.length + ' registro(s)';
+}
+
+function submitColaborador() {
+  var nome = (document.getElementById('colabNome').value||'').trim();
+  var cargo = (document.getElementById('colabCargo').value||'').trim();
+  var telefone = (document.getElementById('colabTelefone').value||'').trim();
+  var filialSel = document.getElementById('colabFilialSel');
+  var filial = (currentFilial === 'corp') ? (filialSel ? filialSel.value : '') : (currentFilial||'').toUpperCase();
+  var msgEl = document.getElementById('colabFormMsg');
+  if (!nome) { if (msgEl) msgEl.textContent = 'Informe o nome do colaborador.'; return; }
+  var isEdit = !!window.__editingColabId;
+  var url = isEdit ? ('/api/colaboradores/' + window.__editingColabId) : '/api/colaboradores';
+  var method = isEdit ? 'PUT' : 'POST';
+  fetch(url, { method: method, headers: {'Content-Type':'application/json'}, body: JSON.stringify({nome: nome, cargo: cargo, telefone: telefone, filial: filial}) })
+  .then(function(resp){
+    if (!resp.ok) throw new Error(resp.status);
+    if (msgEl) msgEl.textContent = '';
+    clearColabForm();
+    loadColaboradores();
+  }).catch(function(){
+    if (msgEl) msgEl.textContent = 'Erro ao salvar colaborador.';
+  });
+}
+
+function editarColaborador(id) {
+  var list = window.__colaboradores || [];
+  var c = null;
+  for (var i=0;i<list.length;i++) { if (list[i].id === id) { c = list[i]; break; } }
+  if (!c) return;
+  window.__editingColabId = id;
+  document.getElementById('colabNome').value = c.nome || '';
+  document.getElementById('colabCargo').value = c.cargo || '';
+  document.getElementById('colabTelefone').value = c.telefone || '';
+  var filialSel = document.getElementById('colabFilialSel');
+  if (filialSel) filialSel.value = c.filial || '';
+  var btn = document.getElementById('btnCancelColab');
+  if (btn) btn.style.display = 'inline-block';
+}
+
+function cancelarEdicaoColab() { clearColabForm(); }
+
+function clearColabForm() {
+  window.__editingColabId = null;
+  document.getElementById('colabNome').value = '';
+  document.getElementById('colabCargo').value = '';
+  document.getElementById('colabTelefone').value = '';
+  var msgEl = document.getElementById('colabFormMsg');
+  if (msgEl) msgEl.textContent = '';
+  var btn = document.getElementById('btnCancelColab');
+  if (btn) btn.style.display = 'none';
+}
+
+function excluirColaborador(id) {
+  if (!confirm('Excluir este colaborador?')) return;
+  fetch('/api/colaboradores/' + id, { method: 'DELETE' }).then(function(resp){
+    if (!resp.ok) throw new Error(resp.status);
+    loadColaboradores();
+  }).catch(function(){
+    alert('Erro ao excluir colaborador.');
+  });
+}
+
+function populateAtendenteSelect(filialOverride, forceIncludeName) {
+  var sel = document.getElementById('frmAtendente');
+  if (!sel) return;
+  var filialAtual;
+  if (filialOverride) { filialAtual = filialOverride; }
+  else if (currentFilial === 'corp') { var fs = document.getElementById('frmFilialSel'); filialAtual = fs ? fs.value : ''; }
+  else { filialAtual = (currentFilial||'').toUpperCase(); }
+  var all = window.__colaboradores || [];
+  var list = [];
+  for (var i=0;i<all.length;i++) { if (!filialAtual || all[i].filial === filialAtual) list.push(all[i]); }
+  var currentVal = (forceIncludeName !== undefined && forceIncludeName !== null) ? forceIncludeName : sel.value;
+  var html = '<option value="">— Selecione o atendente —</option>';
+  var achou = false;
+  for (var j=0;j<list.length;j++) {
+    var nomeC = list[j].nome;
+    var isSel = (nomeC === currentVal);
+    if (isSel) achou = true;
+    html += '<option' + (isSel ? ' selected' : '') + '>' + esc(nomeC) + '</option>';
+  }
+  if (currentVal && !achou) {
+    html += '<option selected>' + esc(currentVal) + ' (não cadastrado)</option>';
+  }
+  sel.innerHTML = html;
+}
+
+function downloadCSV(rows, filename) {
+  var QUOTE = String.fromCharCode(34);
+  var CRLF = String.fromCharCode(13,10);
+  var LF = String.fromCharCode(10);
+  var lines = [];
+  for (var i=0;i<rows.length;i++) {
+    var cells = [];
+    for (var j=0;j<rows[i].length;j++) {
+      var v = rows[i][j];
+      var sVal = (v === null || v === undefined) ? '' : String(v);
+      if (sVal.indexOf(',') !== -1 || sVal.indexOf(QUOTE) !== -1 || sVal.indexOf(LF) !== -1) {
+        sVal = QUOTE + sVal.split(QUOTE).join(QUOTE+QUOTE) + QUOTE;
+      }
+      cells.push(sVal);
+    }
+    lines.push(cells.join(','));
+  }
+  var csv = lines.join(CRLF);
+  var bom = String.fromCharCode(0xFEFF);
+  var blob = new Blob([bom + csv], {type: 'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportColaboradoresCSV() {
+  var list = window.__colaboradores || [];
+  var rows = [['Nome','Cargo','Telefone','Filial']];
+  for (var i=0;i<list.length;i++) { var c = list[i]; rows.push([c.nome||'', c.cargo||'', c.telefone||'', c.filial||'']); }
+  downloadCSV(rows, 'colaboradores.csv');
+}
+
+function exportColaboradoresPDF() {
+  var list = window.__colaboradores || [];
+  var doc = new jspdf.jsPDF();
+  doc.text('Colaboradores', 14, 14);
+  var body = [];
+  for (var i=0;i<list.length;i++) { var c = list[i]; body.push([c.nome||'', c.cargo||'', c.telefone||'', c.filial||'']); }
+  doc.autoTable({ startY: 20, head: [['Nome','Cargo','Telefone','Filial']], body: body });
+  doc.save('colaboradores.pdf');
+}
+
+function getFilteredAtendimentosForExport() {
+  var q = (document.getElementById('searchInput') ? document.getElementById('searchInput').value : '').toLowerCase();
+  if (!q) return allAtendimentos;
+  return allAtendimentos.filter(function(a){
+    if ((a.nome_cliente||'').toLowerCase().indexOf(q) !== -1) return true;
+    if ((a.ci||'').toLowerCase().indexOf(q) !== -1) return true;
+    if ((a.cpf||'').toLowerCase().indexOf(q) !== -1) return true;
+    if ((a.atendente||'').toLowerCase().indexOf(q) !== -1) return true;
+    if ((a.filial||'').toLowerCase().indexOf(q) !== -1) return true;
+    if ((a.tipo_cli||'').toLowerCase().indexOf(q) !== -1) return true;
+    var toalhas = a.toalhas || [];
+    for (var i=0;i<toalhas.length;i++) {
+      var t = toalhas[i];
+      if ((t.produto||'').toLowerCase().indexOf(q) !== -1) return true;
+      if ((t.corToalha||'').toLowerCase().indexOf(q) !== -1) return true;
+      if ((t.corLinha||'').toLowerCase().indexOf(q) !== -1) return true;
+      if ((t.fonte||'').toLowerCase().indexOf(q) !== -1) return true;
+    }
+    return false;
+  });
+}
+
+function toalhasResumo(a) {
+  var toalhas = a.toalhas || [];
+  var parts = [];
+  for (var i=0;i<toalhas.length;i++) { parts.push((toalhas[i].qtde||1) + 'x ' + (toalhas[i].produto||'')); }
+  return parts.join('; ');
+}
+
+function exportAtendimentosCSV() {
+  var list = getFilteredAtendimentosForExport();
+  var rows = [['ID','Data Receb','Data Entrega','Atendente','Cliente','CI','CPF','Tipo','Toalhas','Filial','Registrado em']];
+  for (var i=0;i<list.length;i++) {
+    var a = list[i];
+    rows.push([a.id, a.data_receb||'', a.data_entrega||'', a.atendente||'', a.nome_cliente||'', a.ci||'', a.cpf||'', a.tipo_cli||'', toalhasResumo(a), a.filial||'', a.created_at||'']);
+  }
+  downloadCSV(rows, 'atendimentos.csv');
+}
+
+function exportAtendimentosPDF() {
+  var list = getFilteredAtendimentosForExport();
+  var doc = new jspdf.jsPDF({orientation: 'landscape'});
+  doc.text('Atendimentos', 14, 14);
+  var body = [];
+  for (var i=0;i<list.length;i++) {
+    var a = list[i];
+    body.push([a.id, a.data_receb||'', a.data_entrega||'', a.atendente||'', a.nome_cliente||'', a.ci||'', a.cpf||'', a.tipo_cli||'', toalhasResumo(a), a.filial||'']);
+  }
+  doc.autoTable({ startY: 20, head: [['ID','Data Receb','Data Entrega','Atendente','Cliente','CI','CPF','Tipo','Toalhas','Filial']], body: body, styles: { fontSize: 7 } });
+  doc.save('atendimentos.pdf');
+}
+
+function goToRecordsFiltered(text) {
+  showTab(2);
+  var inp = document.getElementById('searchInput');
+  if (inp && text) {
+    inp.value = text;
+    filterTable();
+  }
+}
+
+function setupDashboardInteractivity() {
+  var canvases = document.querySelectorAll('#chartsGrid canvas');
+  for (var i=0;i<canvases.length;i++) {
+    (function(canvas){
+      var chart = (typeof Chart !== 'undefined' && Chart.getChart) ? Chart.getChart(canvas) : null;
+      if (!chart) return;
+      canvas.style.cursor = 'pointer';
+      canvas.onclick = function(evt) {
+        var points = chart.getElementsAtEventForMode(evt, 'nearest', {intersect:true}, true);
+        if (!points || !points.length) return;
+        var idx = points[0].index;
+        var label = (chart.data && chart.data.labels) ? chart.data.labels[idx] : null;
+        if (label) goToRecordsFiltered(String(label));
+      };
+    })(canvases[i]);
+  }
+  var rows = document.querySelectorAll('.rank-table tbody tr');
+  for (var j=0;j<rows.length;j++) {
+    (function(tr){
+      tr.onclick = function() {
+        var cells = tr.querySelectorAll('td');
+        if (cells.length > 1) goToRecordsFiltered(cells[1].textContent.trim());
+      };
+    })(rows[j]);
+  }
+}
+
+function renderDashboard() {
+  renderDashboardOriginal();
+  setTimeout(setupDashboardInteractivity, 400);
+}
+
 </script>
 </body>
 </html>
