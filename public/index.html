@@ -116,6 +116,10 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
 .chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);}
 .chart-card h4{font-size:.88rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px;}
 .chart-card canvas{max-height:250px;}
+.chart-card.dash-draggable{cursor:grab;position:relative;}
+.chart-card.dash-draggable:hover{outline:2px dashed var(--primary);}
+.chart-card.dragging{opacity:.4;}
+.chart-card.dash-draggable h4::after{content:"⠿ arraste para reordenar";font-size:.65rem;text-transform:none;letter-spacing:0;color:var(--secondary);float:right;font-weight:400;}
 .rank-table{width:100%;font-size:.87rem;border-collapse:collapse;}
 .rank-table th{text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--secondary);font-size:.75rem;text-transform:uppercase;}
 .rank-table td{padding:7px 10px;border-bottom:1px solid var(--border);}
@@ -1250,9 +1254,59 @@ function setupDashboardInteractivity() {
   }
 }
 
+function saveDashOrder() {
+  var grid = document.getElementById('chartsGrid');
+  if (!grid) return;
+  var ids = Array.prototype.slice.call(grid.querySelectorAll('.chart-card')).map(function(c){ return c.dataset.chartId; });
+  localStorage.setItem('dashChartOrder', JSON.stringify(ids));
+}
+
+function applyDashOrderAndDnD() {
+  var grid = document.getElementById('chartsGrid');
+  if (!grid) return;
+  var cards = Array.prototype.slice.call(grid.querySelectorAll('.chart-card'));
+  cards.forEach(function(card){
+    if (!card.dataset.chartId) {
+      var canvas = card.querySelector('canvas');
+      var h4 = card.querySelector('h4');
+      card.dataset.chartId = canvas ? canvas.id : (h4 ? h4.textContent.trim() : 'card');
+    }
+  });
+  var saved = [];
+  try { saved = JSON.parse(localStorage.getItem('dashChartOrder')||'[]'); } catch(e){}
+  if (saved.length) {
+    var byId = {};
+    cards.forEach(function(c){ byId[c.dataset.chartId] = c; });
+    var ordered = [];
+    saved.forEach(function(id){ if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
+    Object.keys(byId).forEach(function(id){ ordered.push(byId[id]); });
+    ordered.forEach(function(c){ grid.appendChild(c); });
+  }
+  var isAdmin = (currentFilial === 'corp');
+  var draggedCard = null;
+  var liveCards = Array.prototype.slice.call(grid.querySelectorAll('.chart-card'));
+  liveCards.forEach(function(card){
+    card.draggable = isAdmin;
+    card.classList.toggle('dash-draggable', isAdmin);
+    if (!isAdmin) { card.ondragstart = null; card.ondragend = null; card.ondragover = null; card.ondrop = null; return; }
+    card.ondragstart = function(e){ draggedCard = card; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
+    card.ondragend = function(){ card.classList.remove('dragging'); saveDashOrder(); };
+    card.ondragover = function(e){ e.preventDefault(); };
+    card.ondrop = function(e){
+      e.preventDefault();
+      if (!draggedCard || draggedCard === card) return;
+      var all = Array.prototype.slice.call(grid.querySelectorAll('.chart-card'));
+      var draggedIdx = all.indexOf(draggedCard);
+      var targetIdx = all.indexOf(card);
+      if (draggedIdx < targetIdx) { card.parentNode.insertBefore(draggedCard, card.nextSibling); }
+      else { card.parentNode.insertBefore(draggedCard, card); }
+    };
+  });
+}
+
 function renderDashboard() {
   renderDashboardOriginal();
-  setTimeout(setupDashboardInteractivity, 400);
+  setTimeout(function(){ applyDashOrderAndDnD(); setupDashboardInteractivity(); }, 400);
 }
 
 </script>
