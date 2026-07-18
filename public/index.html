@@ -114,13 +114,17 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
 .kpi-card .kpi-value{font-size:2rem;font-weight:700;color:var(--primary);}
 .kpi-card .kpi-label{font-size:.78rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
 .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;}
-.chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);}
+.chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);position:relative;min-height:340px;box-sizing:border-box;overflow:hidden;}
 .chart-card h4{font-size:.88rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px;}
-.chart-card canvas{max-height:250px;}
-.chart-card.dash-draggable{cursor:grab;position:relative;}
+.chart-card canvas{max-height:260px;height:260px;}
+.chart-card.dash-draggable{position:absolute;}
+.chart-card.dash-draggable h4{cursor:grab;}
 .chart-card.dash-draggable:hover{outline:2px dashed var(--primary);}
-.chart-card.dragging{opacity:.4;}
-.chart-card.dash-draggable h4::after{content:"⠿ arraste para reordenar";font-size:.65rem;text-transform:none;letter-spacing:0;color:var(--secondary);float:right;font-weight:400;}
+.chart-card.dragging{opacity:.5;}
+.chart-card.dash-draggable h4::after{content:"\26FF arraste / redimensione";font-size:.65rem;text-transform:none;letter-spacing:0;color:var(--secondary);float:right;font-weight:400;}
+.dash-resize-handle{position:absolute;right:2px;bottom:2px;width:15px;height:15px;cursor:nwse-resize;background:linear-gradient(135deg,transparent 50%,var(--primary) 50%);border-radius:2px;opacity:.5;z-index:5;}
+.dash-resize-handle:hover{opacity:1;}
+#chartsGrid.dash-freeform{display:block;position:relative;}
 .rank-table{width:100%;font-size:.87rem;border-collapse:collapse;}
 .rank-table th{text-align:left;padding:7px 10px;border-bottom:2px solid var(--border);color:var(--secondary);font-size:.75rem;text-transform:uppercase;}
 .rank-table td{padding:7px 10px;border-bottom:1px solid var(--border);}
@@ -872,12 +876,43 @@ async function renderDashboardOriginal() {
   const prazos = data.filter(a=>a.data_receb&&a.data_entrega).map(a=>diffDays(a.data_receb,a.data_entrega));
   const prazoMed = prazos.length ? (prazos.reduce((s,v)=>s+v,0)/prazos.length).toFixed(1) : '-';
 
+  let totalToalhas = 0;
+  const diasReceb = {};
+  const prodKpiCount = {};
+  const diaSemanaKpiCount = {};
+  const diasSemanaKpiNomes = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  data.forEach(a => {
+    const toalhasArr = Array.isArray(a.toalhas) ? a.toalhas : [];
+    toalhasArr.forEach(t => {
+      totalToalhas += Number(t.qtde)||1;
+      const p = t.produto || '?';
+      prodKpiCount[p] = (prodKpiCount[p]||0) + (Number(t.qtde)||1);
+    });
+    const isoKpi = brToISO(a.data_receb||'');
+    if (isoKpi) {
+      diasReceb[isoKpi] = (diasReceb[isoKpi]||0) + 1;
+      const dKpi = new Date(isoKpi);
+      if (!isNaN(dKpi.getTime())) {
+        diaSemanaKpiCount[dKpi.getDay()] = (diaSemanaKpiCount[dKpi.getDay()]||0) + 1;
+      }
+    }
+  });
+  const numDiasReceb = Object.keys(diasReceb).length;
+  const producaoDiaria = numDiasReceb ? (totalToalhas / numDiasReceb).toFixed(1) : '-';
+  const modeloMaisBordadoArr = Object.entries(prodKpiCount).sort((a,b)=>b[1]-a[1]);
+  const modeloMaisBordado = modeloMaisBordadoArr.length ? modeloMaisBordadoArr[0][0] : '-';
+  const diaSemanaTopArr = Object.entries(diaSemanaKpiCount).sort((a,b)=>b[1]-a[1]);
+  const diaSemanaTopNome = diaSemanaTopArr.length ? diasSemanaKpiNomes[Number(diaSemanaTopArr[0][0])] : '-';
+
   kpiGrid.innerHTML = `
     <div class="kpi-card"><div class="kpi-value">${totalAtend}</div><div class="kpi-label">Total de Atendimentos</div></div>
     <div class="kpi-card"><div class="kpi-value">${prazoMed}</div><div class="kpi-label">Prazo Médio (dias)</div></div>
+    <div class="kpi-card"><div class="kpi-value">${producaoDiaria}</div><div class="kpi-label">Produção Diária (média)</div></div>
+    <div class="kpi-card"><div class="kpi-value">${totalToalhas}</div><div class="kpi-label">Toalhas Recebidas</div></div>
+    <div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">${modeloMaisBordado}</div><div class="kpi-label">Modelo Mais Bordado</div></div>
+    <div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">${diaSemanaTopNome}</div><div class="kpi-label">Dia com Mais Recebimentos</div></div>
   `;
-
-  chartsGrid.innerHTML = '';
+chartsGrid.innerHTML = '';
 
   // ── Gráfico por filial (apenas corp) ──
   if (currentFilial === 'corp') {
@@ -886,7 +921,7 @@ async function renderDashboardOriginal() {
     chartsGrid.innerHTML += '<div class="chart-card" id="cc-filial"><h4>Atendimentos por Filial</h4><canvas id="chartFilial"></canvas></div>';
     setTimeout(()=>{
       const ctx = document.getElementById('chartFilial');
-      if(ctx) charts.filial = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFilial),datasets:[{label:'Atendimentos',data:Object.values(byFilial),backgroundColor:Object.keys(byFilial).map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
+      if(ctx) charts.filial = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFilial),datasets:[{label:'Atendimentos',data:Object.values(byFilial),backgroundColor:Object.keys(byFilial).map(function(_,i){return fcColor(i);})}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
     },50);
   }
 
@@ -905,7 +940,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Evolução Semanal</h4><canvas id="chartSemanal"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartSemanal');
-    if(ctx) charts.semanal = new Chart(ctx,{type:'line',data:{labels:semKeys,datasets:[{label:'Atend/semana',data:semKeys.map(k=>bySemana[k]),borderColor:'#65B32E',backgroundColor:'rgba(101,179,46,.15)',fill:true,tension:.3}]},options:{responsive:true,plugins:{datalabels:{anchor:'end',align:'top',color:'#333',font:{weight:'600',size:10}}}}});
+    if(ctx) charts.semanal = new Chart(ctx,{type:'line',data:{labels:semKeys,datasets:[{label:'Atend/semana',data:semKeys.map(k=>bySemana[k]),borderColor:'#65B32E',backgroundColor:'rgba(101,179,46,.15)',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{datalabels:{anchor:'end',align:'top',color:'#333',font:{weight:'600',size:10}}}}});
   },50);
 
   // ── Produto mais comum ──
@@ -917,7 +952,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Produto Bordado Mais Comum</h4><canvas id="chartProd"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartProd');
-    if(ctx) charts.prod = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byProd),datasets:[{data:Object.values(byProd),backgroundColor:Object.keys(byProd).map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{datalabels:{color:'#fff',font:{weight:'600',size:11},formatter:function(v){return v;}}}}});
+    if(ctx) charts.prod = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byProd),datasets:[{data:Object.values(byProd),backgroundColor:Object.keys(byProd).map(function(_,i){return fcColor(i);})}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}},scales:{x:{beginAtZero:true}}}});
   },50);
 
   // ── Tipo de cliente ──
@@ -926,7 +961,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Tipo de Cliente</h4><canvas id="chartTipo"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartTipo');
-    if(ctx) charts.tipo = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byTipo),datasets:[{data:Object.values(byTipo),backgroundColor:['#CC182C','#65B32E','#645E60']}]},options:{responsive:true,plugins:{datalabels:{color:'#fff',font:{weight:'600',size:11},formatter:function(v){return v;}}}}});
+    if(ctx) charts.tipo = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byTipo),datasets:[{data:Object.values(byTipo),backgroundColor:['#CC182C','#65B32E','#645E60']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{datalabels:{color:'#fff',font:{weight:'600',size:11},formatter:function(v){return v;}}}}});
   },50);
 
   // ── Fonte mais usada ──
@@ -938,17 +973,18 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Estilo de Fonte Mais Usado</h4><canvas id="chartFonte"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartFonte');
-    if(ctx) charts.fonte = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFonte),datasets:[{label:'Usos',data:Object.values(byFonte),backgroundColor:Object.keys(byFonte).map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
+    if(ctx) charts.fonte = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFonte),datasets:[{label:'Usos',data:Object.values(byFonte),backgroundColor:Object.keys(byFonte).map(function(_,i){return fcColor(i);})}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}},scales:{x:{beginAtZero:true}}}});
   },50);
 
   // ── Ranking de atendentes ──
   const byAtend = {};
   data.forEach(a => { const n=a.atendente||'?'; byAtend[n]=(byAtend[n]||0)+1; });
   const rank = Object.entries(byAtend).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  chartsGrid.innerHTML += `<div class="chart-card"><h4>Ranking de Atendentes</h4>
-    <table class="rank-table"><thead><tr><th>#</th><th>Atendente</th><th>Qtde</th></tr></thead>
-    <tbody>${rank.map((r,i)=>`<tr><td>${i+1}</td><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</tbody>
-    </table></div>`;
+  chartsGrid.innerHTML += '<div class="chart-card"><h4>Ranking de Atendentes</h4><canvas id="chartRank"></canvas></div>';
+  setTimeout(()=>{
+    const ctx = document.getElementById('chartRank');
+    if(ctx) charts.rank = new Chart(ctx,{type:'bar',data:{labels:rank.map(r=>r[0]),datasets:[{label:'Atendimentos',data:rank.map(r=>r[1]),backgroundColor:'#65B32E'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'top',color:'#333',font:{weight:'600',size:11}}},scales:{y:{beginAtZero:true}}}});
+  },50);
 
   // ── Atendimentos por Dia da Semana ──
   const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
@@ -962,7 +998,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Atendimentos por Dia da Semana</h4><canvas id="chartDiaSemana"></canvas></div>';
   setTimeout(()=>{
     const ctxDS = document.getElementById('chartDiaSemana');
-    if(ctxDS) charts.diaSemana = new Chart(ctxDS,{type:'bar',data:{labels:diasSemana,datasets:[{label:'Atendimentos',data:byDiaSemana,backgroundColor:diasSemana.map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
+    if(ctxDS) charts.diaSemana = new Chart(ctxDS,{type:'bar',data:{labels:diasSemana,datasets:[{label:'Atendimentos',data:byDiaSemana,backgroundColor:diasSemana.map(function(_,i){return fcColor(i);})}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
   },50);
 }
 
@@ -1258,11 +1294,20 @@ function setupDashboardInteractivity() {
   }
 }
 
-function saveDashOrder() {
+function saveDashLayout() {
   var grid = document.getElementById('chartsGrid');
   if (!grid) return;
-  var ids = Array.prototype.slice.call(grid.querySelectorAll('.chart-card')).map(function(c){ return c.dataset.chartId; });
-  localStorage.setItem('dashChartOrder', JSON.stringify(ids));
+  var layout = {};
+  Array.prototype.slice.call(grid.querySelectorAll('.chart-card')).forEach(function(card){
+    if (!card.dataset.chartId) return;
+    layout[card.dataset.chartId] = {
+      left: parseFloat(card.style.left)||0,
+      top: parseFloat(card.style.top)||0,
+      width: parseFloat(card.style.width)||card.offsetWidth,
+      height: parseFloat(card.style.height)||card.offsetHeight
+    };
+  });
+  localStorage.setItem('dashChartLayout', JSON.stringify(layout));
 }
 
 function applyDashOrderAndDnD() {
@@ -1276,38 +1321,108 @@ function applyDashOrderAndDnD() {
       card.dataset.chartId = canvas ? canvas.id : (h4 ? h4.textContent.trim() : 'card');
     }
   });
-  var saved = [];
-  try { saved = JSON.parse(localStorage.getItem('dashChartOrder')||'[]'); } catch(e){}
-  if (saved.length) {
-    var byId = {};
-    cards.forEach(function(c){ byId[c.dataset.chartId] = c; });
-    var ordered = [];
-    saved.forEach(function(id){ if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
-    Object.keys(byId).forEach(function(id){ ordered.push(byId[id]); });
-    ordered.forEach(function(c){ grid.appendChild(c); });
+
+  if (currentFilial !== 'corp') {
+    grid.classList.remove('dash-freeform');
+    cards.forEach(function(card){
+      card.style.position = '';
+      card.style.left = '';
+      card.style.top = '';
+      card.style.width = '';
+      card.style.height = '';
+      card.classList.remove('dash-draggable');
+      var h4b = card.querySelector('h4');
+      if (h4b) h4b.onmousedown = null;
+      var rh = card.querySelector('.dash-resize-handle');
+      if (rh) rh.remove();
+    });
+    return;
   }
-  var isAdmin = (currentFilial === 'corp');
-  var draggedCard = null;
-  var liveCards = Array.prototype.slice.call(grid.querySelectorAll('.chart-card'));
-  liveCards.forEach(function(card){
-    card.draggable = isAdmin;
-    card.classList.toggle('dash-draggable', isAdmin);
-    if (!isAdmin) { card.ondragstart = null; card.ondragend = null; card.ondragover = null; card.ondrop = null; return; }
-    card.ondragstart = function(e){ draggedCard = card; card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
-    card.ondragend = function(){ card.classList.remove('dragging'); saveDashOrder(); };
-    card.ondragover = function(e){ e.preventDefault(); };
-    card.ondrop = function(e){
+
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem('dashChartLayout')||'{}'); } catch(e){}
+
+  var naturalRects = {};
+  cards.forEach(function(card){
+    var r = card.getBoundingClientRect();
+    var gr = grid.getBoundingClientRect();
+    naturalRects[card.dataset.chartId] = { left: r.left-gr.left, top: r.top-gr.top, width: r.width, height: r.height };
+  });
+  var containerHeight = grid.scrollHeight;
+
+  grid.classList.add('dash-freeform');
+  grid.style.height = containerHeight + 'px';
+
+  cards.forEach(function(card){
+    var id = card.dataset.chartId;
+    var pos = saved[id] || naturalRects[id];
+    card.style.position = 'absolute';
+    card.style.left = pos.left + 'px';
+    card.style.top = pos.top + 'px';
+    card.style.width = pos.width + 'px';
+    card.style.height = pos.height + 'px';
+    card.classList.add('dash-draggable');
+
+    var h4 = card.querySelector('h4');
+    if (h4) {
+      h4.onmousedown = function(e) {
+        e.preventDefault();
+        var startX = e.clientX, startY = e.clientY;
+        var origLeft = parseFloat(card.style.left)||0, origTop = parseFloat(card.style.top)||0;
+        card.classList.add('dragging');
+        function onMove(ev) {
+          var dx = ev.clientX - startX, dy = ev.clientY - startY;
+          var maxLeft = Math.max(0, grid.clientWidth - card.offsetWidth);
+          var maxTop = Math.max(0, grid.clientHeight - card.offsetHeight);
+          card.style.left = Math.min(Math.max(0, origLeft + dx), maxLeft) + 'px';
+          card.style.top = Math.min(Math.max(0, origTop + dy), maxTop) + 'px';
+        }
+        function onUp() {
+          card.classList.remove('dragging');
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          saveDashLayout();
+        }
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      };
+    }
+
+    var handle = card.querySelector('.dash-resize-handle');
+    if (!handle) {
+      handle = document.createElement('div');
+      handle.className = 'dash-resize-handle';
+      card.appendChild(handle);
+    }
+    handle.onmousedown = function(e) {
       e.preventDefault();
-      if (!draggedCard || draggedCard === card) return;
-      var all = Array.prototype.slice.call(grid.querySelectorAll('.chart-card'));
-      var draggedIdx = all.indexOf(draggedCard);
-      var targetIdx = all.indexOf(card);
-      if (draggedIdx < targetIdx) { card.parentNode.insertBefore(draggedCard, card.nextSibling); }
-      else { card.parentNode.insertBefore(draggedCard, card); }
+      e.stopPropagation();
+      var startX = e.clientX, startY = e.clientY;
+      var origW = card.offsetWidth, origH = card.offsetHeight;
+      function onMove(ev) {
+        var dx = ev.clientX - startX, dy = ev.clientY - startY;
+        var maxW = Math.max(260, grid.clientWidth - parseFloat(card.style.left||0));
+        var maxH = Math.max(220, grid.clientHeight - parseFloat(card.style.top||0));
+        var newW = Math.min(Math.max(260, origW + dx), maxW);
+        var newH = Math.min(Math.max(220, origH + dy), maxH);
+        card.style.width = newW + 'px';
+        card.style.height = newH + 'px';
+        var canvas = card.querySelector('canvas');
+        if (canvas) {
+          var chartInst = (typeof Chart !== 'undefined' && Chart.getChart) ? Chart.getChart(canvas) : null;
+          if (chartInst) chartInst.resize();
+        }
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        saveDashLayout();
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
     };
   });
 }
-
 function renderDashboard() {
   renderDashboardOriginal();
   setTimeout(function(){ applyDashOrderAndDnD(); setupDashboardInteractivity(); }, 400);
