@@ -320,9 +320,7 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
       <div class="form-group" id="grp-colab-filial-sel" style="display:none;">
         <label>Filial</label>
         <select id="colabFilialSel">
-          <option value="GUS">Garanhuns</option><option value="IMB">Imbiribeira</option>
-          <option value="PAL">Paralela</option><option value="TAM">Tamarineira</option>
-          <option value="AJU">Aracaju</option><option value="JPA">João Pessoa</option>
+          <option value="GUS">Garanhuns</option><option value="IMB">Imbiribeira</option><option value="PAL">Paralela</option><option value="TAM">Tamarineira</option><option value="AJU">Aracaju</option><option value="JPA">João Pessoa</option><option value="PNG">Ponta Negra</option><option value="CAU">Caruaru</option><option value="BAR">Barris</option>
         </select>
       </div>
       <div class="form-group">
@@ -943,6 +941,21 @@ async function renderDashboardOriginal() {
     <table class="rank-table"><thead><tr><th>#</th><th>Atendente</th><th>Qtde</th></tr></thead>
     <tbody>${rank.map((r,i)=>`<tr><td>${i+1}</td><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</tbody>
     </table></div>`;
+
+  // ── Atendimentos por Dia da Semana ──
+  const diasSemana = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+  const byDiaSemana = [0,0,0,0,0,0,0];
+  data.forEach(a => {
+    const isoDS = brToISO(a.data_receb||'');
+    if (!isoDS) return;
+    const dDS = new Date(isoDS);
+    if (!isNaN(dDS.getTime())) byDiaSemana[dDS.getDay()]++;
+  });
+  chartsGrid.innerHTML += '<div class="chart-card"><h4>Atendimentos por Dia da Semana</h4><canvas id="chartDiaSemana"></canvas></div>';
+  setTimeout(()=>{
+    const ctxDS = document.getElementById('chartDiaSemana');
+    if(ctxDS) charts.diaSemana = new Chart(ctxDS,{type:'bar',data:{labels:diasSemana,datasets:[{label:'Atendimentos',data:byDiaSemana,backgroundColor:'#a01520'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+  },50);
 }
 
 // ─── ENTER KEY ─────────────────────────────────────────────────────────────────
@@ -1159,13 +1172,55 @@ function exportAtendimentosPDF() {
   doc.save('atendimentos.pdf');
 }
 
-function goToRecordsFiltered(text) {
-  showTab(2);
-  var inp = document.getElementById('searchInput');
-  if (inp && text) {
-    inp.value = text;
-    filterTable();
+function ensureDashModal() {
+  var m = document.getElementById('dashFilterModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'dashFilterModal';
+    m.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;';
+    m.innerHTML = '<div style="background:#fff;border-radius:8px;max-width:800px;width:92%;max-height:80vh;overflow:auto;padding:20px;position:relative;"><button id="dashFilterModalClose" style="position:absolute;top:10px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#a01520;">&times;</button><h3 id="dashFilterModalTitle" style="margin-bottom:12px;color:#a01520;"></h3><div id="dashFilterModalBody"></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener('click', function(e){ if (e.target === m) m.style.display = 'none'; });
+    document.getElementById('dashFilterModalClose').onclick = function(){ m.style.display = 'none'; };
   }
+  return m;
+}
+
+function showFilteredModal(label, canvasId) {
+  var data = Array.isArray(allAtendimentos) ? allAtendimentos : [];
+  var results = [];
+  if (canvasId === 'chartDiaSemana') {
+    var dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    var idx = dias.indexOf(label);
+    results = data.filter(function(a){
+      var iso = brToISO(a.data_receb||'');
+      if (!iso) return false;
+      var d = new Date(iso);
+      return d.getDay() === idx;
+    });
+  } else {
+    var q = String(label).toLowerCase();
+    results = data.filter(function(a){
+      var toalhas = Array.isArray(a.toalhas) ? a.toalhas : [];
+      var hay = [a.nome_cliente,a.ci,a.cpf,a.atendente,a.filial,a.tipo_cli].concat(
+        toalhas.map(function(t){ return t.produto; })
+      ).join(' ').toLowerCase();
+      return hay.indexOf(q) !== -1;
+    });
+  }
+  var m = ensureDashModal();
+  document.getElementById('dashFilterModalTitle').textContent = 'Atendimentos: ' + label + ' (' + results.length + ')';
+  var body = document.getElementById('dashFilterModalBody');
+  if (!results.length) {
+    body.innerHTML = '<p class="no-results">Nenhum atendimento encontrado.</p>';
+  } else {
+    body.innerHTML = '<table class="rank-table"><thead><tr><th>Cliente</th><th>Filial</th><th>Atendente</th><th>Recebido</th><th>Entrega</th></tr></thead><tbody>' +
+      results.slice(0,200).map(function(a){
+        return '<tr><td>'+(a.nome_cliente||'')+'</td><td>'+(a.filial||'')+'</td><td>'+(a.atendente||'')+'</td><td>'+(a.data_receb||'')+'</td><td>'+(a.data_entrega||'')+'</td></tr>';
+      }).join('') + '</tbody></table>' +
+      (results.length>200 ? '<p style="margin-top:8px;color:#777;">Mostrando 200 de '+results.length+' resultados.</p>' : '');
+  }
+  m.style.display = 'flex';
 }
 
 function setupDashboardInteractivity() {
@@ -1180,7 +1235,7 @@ function setupDashboardInteractivity() {
         if (!points || !points.length) return;
         var idx = points[0].index;
         var label = (chart.data && chart.data.labels) ? chart.data.labels[idx] : null;
-        if (label) goToRecordsFiltered(String(label));
+        if (label) showFilteredModal(String(label), canvas.id);
       };
     })(canvases[i]);
   }
@@ -1189,7 +1244,7 @@ function setupDashboardInteractivity() {
     (function(tr){
       tr.onclick = function() {
         var cells = tr.querySelectorAll('td');
-        if (cells.length > 1) goToRecordsFiltered(cells[1].textContent.trim());
+        if (cells.length > 1) showFilteredModal(cells[1].textContent.trim(), null);
       };
     })(rows[j]);
   }
