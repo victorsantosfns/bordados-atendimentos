@@ -113,8 +113,8 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
 .kpi-card{background:var(--card);border-radius:9px;padding:16px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.07);border-top:3px solid var(--primary);}
 .kpi-card .kpi-value{font-size:2rem;font-weight:700;color:var(--primary);}
 .kpi-card .kpi-label{font-size:.78rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
-.charts-grid{display:flex;flex-wrap:nowrap;gap:18px;overflow-x:auto;padding-bottom:14px;}
-.chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);flex:0 0 400px;width:400px;}
+.charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px;}
+.chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);}
 .chart-card h4{font-size:.88rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px;}
 .chart-card canvas{max-height:250px;}
 .chart-card.dash-draggable{cursor:grab;position:relative;}
