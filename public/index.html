@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Bordados — Atendimentos do Setor de Bordados</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -112,8 +113,8 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
 .kpi-card{background:var(--card);border-radius:9px;padding:16px;text-align:center;box-shadow:0 1px 6px rgba(0,0,0,.07);border-top:3px solid var(--primary);}
 .kpi-card .kpi-value{font-size:2rem;font-weight:700;color:var(--primary);}
 .kpi-card .kpi-label{font-size:.78rem;color:var(--secondary);text-transform:uppercase;letter-spacing:.4px;margin-top:4px;}
-.charts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px;}
-.chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);}
+.charts-grid{display:flex;flex-wrap:nowrap;gap:18px;overflow-x:auto;padding-bottom:14px;}
+.chart-card{background:var(--card);border-radius:9px;padding:18px;box-shadow:0 1px 6px rgba(0,0,0,.07);flex:0 0 400px;width:400px;}
 .chart-card h4{font-size:.88rem;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px;}
 .chart-card canvas{max-height:250px;}
 .chart-card.dash-draggable{cursor:grab;position:relative;}
@@ -846,6 +847,9 @@ function destroyCharts() {
   charts = {};
 }
 
+const FC_COLORS = ['#CC182C','#65B32E','#AE1922','#65B32E','#CC182C','#B9CE00','#645E60','#AAA499'];
+function fcColor(i) { return FC_COLORS[i % FC_COLORS.length]; }
+
 async function renderDashboardOriginal() {
   const kpiGrid = document.getElementById('kpiGrid');
   const chartsGrid = document.getElementById('chartsGrid');
@@ -882,7 +886,7 @@ async function renderDashboardOriginal() {
     chartsGrid.innerHTML += '<div class="chart-card" id="cc-filial"><h4>Atendimentos por Filial</h4><canvas id="chartFilial"></canvas></div>';
     setTimeout(()=>{
       const ctx = document.getElementById('chartFilial');
-      if(ctx) charts.filial = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFilial),datasets:[{label:'Atendimentos',data:Object.values(byFilial),backgroundColor:'#a01520'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+      if(ctx) charts.filial = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFilial),datasets:[{label:'Atendimentos',data:Object.values(byFilial),backgroundColor:Object.keys(byFilial).map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
     },50);
   }
 
@@ -901,7 +905,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Evolução Semanal</h4><canvas id="chartSemanal"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartSemanal');
-    if(ctx) charts.semanal = new Chart(ctx,{type:'line',data:{labels:semKeys,datasets:[{label:'Atend/semana',data:semKeys.map(k=>bySemana[k]),borderColor:'#a01520',backgroundColor:'rgba(160,21,32,.1)',fill:true,tension:.3}]},options:{responsive:true}});
+    if(ctx) charts.semanal = new Chart(ctx,{type:'line',data:{labels:semKeys,datasets:[{label:'Atend/semana',data:semKeys.map(k=>bySemana[k]),borderColor:'#65B32E',backgroundColor:'rgba(101,179,46,.15)',fill:true,tension:.3}]},options:{responsive:true,plugins:{datalabels:{anchor:'end',align:'top',color:'#333',font:{weight:'600',size:10}}}}});
   },50);
 
   // ── Produto mais comum ──
@@ -913,7 +917,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Produto Bordado Mais Comum</h4><canvas id="chartProd"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartProd');
-    if(ctx) charts.prod = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byProd),datasets:[{data:Object.values(byProd),backgroundColor:['#a01520','#c0392b','#e74c3c','#f1948a','#f5b7b1','#fadbd8','#922b21']}]},options:{responsive:true}});
+    if(ctx) charts.prod = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byProd),datasets:[{data:Object.values(byProd),backgroundColor:Object.keys(byProd).map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{datalabels:{color:'#fff',font:{weight:'600',size:11},formatter:function(v){return v;}}}}});
   },50);
 
   // ── Tipo de cliente ──
@@ -922,7 +926,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Tipo de Cliente</h4><canvas id="chartTipo"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartTipo');
-    if(ctx) charts.tipo = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byTipo),datasets:[{data:Object.values(byTipo),backgroundColor:['#0b57d0','#b36b00','#1a6630']}]},options:{responsive:true}});
+    if(ctx) charts.tipo = new Chart(ctx,{type:'pie',data:{labels:Object.keys(byTipo),datasets:[{data:Object.values(byTipo),backgroundColor:['#CC182C','#65B32E','#645E60']}]},options:{responsive:true,plugins:{datalabels:{color:'#fff',font:{weight:'600',size:11},formatter:function(v){return v;}}}}});
   },50);
 
   // ── Fonte mais usada ──
@@ -934,7 +938,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Estilo de Fonte Mais Usado</h4><canvas id="chartFonte"></canvas></div>';
   setTimeout(()=>{
     const ctx = document.getElementById('chartFonte');
-    if(ctx) charts.fonte = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFonte),datasets:[{label:'Usos',data:Object.values(byFonte),backgroundColor:'#7a0f17'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+    if(ctx) charts.fonte = new Chart(ctx,{type:'bar',data:{labels:Object.keys(byFonte),datasets:[{label:'Usos',data:Object.values(byFonte),backgroundColor:Object.keys(byFonte).map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
   },50);
 
   // ── Ranking de atendentes ──
@@ -958,7 +962,7 @@ async function renderDashboardOriginal() {
   chartsGrid.innerHTML += '<div class="chart-card"><h4>Atendimentos por Dia da Semana</h4><canvas id="chartDiaSemana"></canvas></div>';
   setTimeout(()=>{
     const ctxDS = document.getElementById('chartDiaSemana');
-    if(ctxDS) charts.diaSemana = new Chart(ctxDS,{type:'bar',data:{labels:diasSemana,datasets:[{label:'Atendimentos',data:byDiaSemana,backgroundColor:'#a01520'}]},options:{responsive:true,plugins:{legend:{display:false}}}});
+    if(ctxDS) charts.diaSemana = new Chart(ctxDS,{type:'bar',data:{labels:diasSemana,datasets:[{label:'Atendimentos',data:byDiaSemana,backgroundColor:diasSemana.map(function(_,i){return fcColor(i);})}]},options:{responsive:true,plugins:{legend:{display:false},datalabels:{anchor:'end',align:'end',color:'#333',font:{weight:'600',size:11}}}}});
   },50);
 }
 
