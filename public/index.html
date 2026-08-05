@@ -943,7 +943,7 @@ chartsGrid.innerHTML = '';
     if(ctx) charts.semanal = new Chart(ctx,{type:'line',data:{labels:semKeys,datasets:[{label:'Atend/semana',data:semKeys.map(k=>bySemana[k]),borderColor:'#65B32E',backgroundColor:'rgba(101,179,46,.15)',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,plugins:{datalabels:{anchor:'end',align:'top',color:'#333',font:{weight:'600',size:10}}}}});
   },50);
 
-  // ── Produto mais comum ──
+  const byMes={};data.forEach(a=>{const drMes=brToISO(a.data_receb||'');if(!drMes)return;const dMes=new Date(drMes);if(isNaN(dMes.getTime()))return;const kMes=dMes.getFullYear()+'-'+String(dMes.getMonth()+1).padStart(2,'0');byMes[kMes]=(byMes[kMes]||0)+1;});const mesKeys=Object.keys(byMes).sort();const NOMES_MES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];let acumuladoMes=0;const acumuladoData=mesKeys.map(k=>{acumuladoMes+=byMes[k];return acumuladoMes;});const mesLabels=mesKeys.map(k=>{const p=k.split('-');return NOMES_MES[parseInt(p[1],10)-1]+'/'+p[0].slice(2);});chartsGrid.innerHTML+='<div class="chart-card"><h4>Atendimentos Acumulados (Mês a Mês)</h4><canvas id="chartAcumulado"></canvas></div>';setTimeout(()=>{const ctx=document.getElementById('chartAcumulado');if(ctx)charts.acumulado=new Chart(ctx,{type:'line',data:{labels:mesLabels,datasets:[{label:'Acumulado',data:acumuladoData,borderColor:'#CC182C',backgroundColor:'rgba(204,24,44,.15)',fill:true,tension:.25}]},options:{responsive:true,maintainAspectRatio:false,plugins:{datalabels:{anchor:'end',align:'top',color:'#333',font:{weight:'600',size:10}}}}});},50);// ── Produto mais comum ──
   const byProd = {};
   data.forEach(a => {
     const toalhas = Array.isArray(a.toalhas)?a.toalhas:[];
