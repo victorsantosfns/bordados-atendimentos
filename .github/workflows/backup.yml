@@ -1,0 +1,43 @@
+name: Backup diário de atendimentos
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Buscar atendimentos da plataforma
+        run: |
+          DATE=$(date -u +%F)
+          echo "BACKUP_DATE=$DATE" >> "$GITHUB_ENV"
+          curl -sS -f "https://bordados-atendimentos.onrender.com/api/atendimentos?filial=CORP" -o "atendimentos_${DATE}.json"
+          COUNT=$(node -e "console.log(JSON.parse(require('fs').readFileSync('atendimentos_${DATE}.json')).length)")
+          echo "Registros baixados: $COUNT"
+          if [ "$COUNT" -lt 1 ]; then
+            echo "Backup vazio ou inválido, abortando." >&2
+            exit 1
+          fi
+
+      - name: Clonar repositório de backup no GitLab
+        run: |
+          git clone "https://oauth2:${GITLAB_TOKEN}@gitlab.com/victorsantosfns/bordados-backup.git" gitlab-backup
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+
+      - name: Salvar e enviar o backup para o GitLab
+        run: |
+          mkdir -p gitlab-backup/atendimentos
+          cp "atendimentos_${BACKUP_DATE}.json" "gitlab-backup/atendimentos/atendimentos_${BACKUP_DATE}.json"
+          cd gitlab-backup
+          git config user.name "backup-bot"
+          git config user.email "backup-bot@bordados-atendimentos"
+          git add "atendimentos/atendimentos_${BACKUP_DATE}.json"
+          if git diff --cached --quiet; then
+            echo "Nada para commitar (backup já existe ou é idêntico)."
+          else
+            git commit -m "Backup de atendimentos - ${BACKUP_DATE}"
+            git push
+          fi
