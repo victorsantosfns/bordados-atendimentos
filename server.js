@@ -86,6 +86,7 @@ app.post('/api/atendimentos', async (req, res) => {
       corLinha, fonte, epi, motivoEpi
     } = req.body;
     if (!filial) return res.status(400).json({ error: 'Filial obrigatoria.' });
+    if (!Array.isArray(toalhas) || toalhas.length === 0) return res.status(400).json({ error: 'Informe ao menos uma toalha.' });
     const result = await pool.query(
       `INSERT INTO atendimentos
       (filial, atendente, nome_cliente, ci, cpf, tipo_cli,

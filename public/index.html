@@ -619,6 +619,8 @@ function showMsg(id, type, text) {
 }
 
 async function submitAtendimento() {
+  const btnSubmit = document.getElementById('btnSubmitAtendimento');
+  if (btnSubmit && btnSubmit.disabled) return;
   const dataReceb = document.getElementById('frmDataReceb').value;
   const atendente = document.getElementById('frmAtendente').value.trim();
   const dataEntrega = document.getElementById('frmDataEntrega').value;
@@ -636,6 +638,8 @@ const filial = editingId
      : currentFilial.toUpperCase());
 
   const toalhas = getToalhas();
+  if (!toalhas.length) { showMsg('formMsg','error','Adicione pelo menos uma toalha ao atendimento.'); return; }
+
   const body = {
     filial, atendente, nomeCliente,
     ci: document.getElementById('frmCi').value,
@@ -648,6 +652,7 @@ const filial = editingId
   };
 
   showMsg('formMsg','','Salvando...');
+  if (btnSubmit) btnSubmit.disabled = true;
 try {
   const isEdit = !!editingId;
   const url = isEdit ? ('/api/atendimentos/' + editingId) : '/api/atendimentos';
@@ -663,6 +668,8 @@ try {
   allAtendimentos = [];
   } catch(e) {
     showMsg('formMsg','error','Erro: ' + e.message);
+  } finally {
+    if (btnSubmit) btnSubmit.disabled = false;
   }
 }
 
