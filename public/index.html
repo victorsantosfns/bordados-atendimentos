@@ -34,8 +34,10 @@ body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--t
 .changepw-header h2{font-size:1.3rem;}
 .changepw-body{padding:24px;}
 .changepw-body p{font-size:.92rem;color:var(--secondary);margin-bottom:18px;}
-.changepw-body input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:1rem;margin-bottom:14px;}
-.changepw-body input:focus{border-color:var(--primary);outline:none;}
+.changepw-body input,.changepw-body select{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:1rem;margin-bottom:14px;box-sizing:border-box;}
+.changepw-body input:focus,.changepw-body select:focus{border-color:var(--primary);outline:none;}
+.changepw-body label{display:block;font-size:.85rem;font-weight:600;color:var(--secondary);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;}
+.changepw-body .btn-changepw{margin-bottom:10px;}
 .btn-changepw{width:100%;padding:11px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:1rem;font-weight:600;cursor:pointer;}
 .btn-changepw:hover{background:var(--primary-dark);}
 #changePwMsg{margin-top:10px;font-size:.88rem;color:var(--danger);}
@@ -167,7 +169,7 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
     </div>
     <div class="login-body">
       <label for="selFilial">Filial</label>
-      <select id="selFilial">
+      <select id="selFilial" onchange="onFilialLoginChange()">
         <option value="">— Selecione a filial —</option>
         <option value="gus">Garanhuns</option>
         <option value="imb">Imbiribeira</option>
@@ -180,11 +182,39 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
         <option value="bar">Barris</option>
         <option value="corp">Corporativo (Adm)</option>
       </select>
+      <!-- 04/09/2026, pedido do Victor: login por Matrícula + Filial + Senha
+           (individual por colaborador), no lugar de 1 senha só pra filial
+           inteira — só aparece pras filiais de loja, "corp" continua com
+           senha única compartilhada (decisão explícita dele). -->
+      <div id="grpMatricula">
+        <label for="inpMatricula">Matrícula</label>
+        <input type="text" id="inpMatricula" placeholder="Sua matrícula" autocomplete="username"/>
+      </div>
       <label for="inpSenha">Senha</label>
       <input type="password" id="inpSenha" placeholder="Digite sua senha" autocomplete="current-password"/>
       <button class="btn-login" onclick="doLogin()">Entrar</button>
       <span class="forgot-link" onclick="showForgot()">Esqueceu a senha?</span>
       <div id="loginMsg" class="login-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Primeiro acesso — vincular matrícula ao cadastro já existente ══
+     Cobre os 33 colaboradores que já estavam cadastrados só pelo nome antes
+     desta mudança: na primeira vez que a matrícula não é encontrada, a
+     pessoa escolhe o próprio nome na lista da filial e a matrícula+senha
+     digitadas ficam vinculadas a esse cadastro — sem criar duplicata e sem
+     mexer em nenhum atendimento já lançado em nome dela. ══ -->
+<div id="vincularScreen" style="display:none;align-items:center;justify-content:center;min-height:100vh;padding:20px;">
+  <div class="changepw-card">
+    <div class="changepw-header"><h2>Primeiro Acesso</h2></div>
+    <div class="changepw-body">
+      <p>Não encontramos a matrícula <b id="vincMatriculaTxt"></b> nesta filial. Selecione seu nome na lista abaixo pra vincular sua matrícula e senha ao seu cadastro.</p>
+      <label>Seu nome</label>
+      <select id="selVincularNome"><option value="">— Selecione seu nome —</option></select>
+      <button class="btn-changepw" onclick="confirmarVinculo()">Vincular e Entrar</button>
+      <span class="forgot-link" onclick="cancelarVinculo()">Voltar</span>
+      <div id="vincularMsg" class="login-msg"></div>
     </div>
   </div>
 </div>
@@ -379,7 +409,7 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
       </div>
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>Nome</th><th>Cargo</th><th>Telefone</th><th>Filial</th><th>Ações</th></tr></thead>
+          <thead><tr><th>Nome</th><th>Cargo</th><th>Telefone</th><th>Filial</th><th>Acesso</th><th>Ações</th></tr></thead>
           <tbody id="colaboradoresTbody"></tbody>
         </table>
       </div>
@@ -406,6 +436,10 @@ let currentFilial = null;
   let editingFilial = null;
 let allAtendimentos = [];
 let charts = {};
+// 04/09/2026: colaborador logado individualmente (matricula+senha) — null
+// no modo "corp" (que continua com senha unica compartilhada).
+let currentColaborador = null;
+let _loginPendente = null;
 
 // ─── DATAS ────────────────────────────────────────────────────────────────────
 function todayISO() {
@@ -431,6 +465,11 @@ function diffDays(d1, d2) {
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
+// 04/09/2026: "corp" (administrativo) continua com senha única compartilhada,
+// só do jeito que já era — decisão explícita do Victor. As filiais de loja
+// passam a usar login individual por Matrícula (ver /api/colaboradores/login,
+// servidor valida com hash bcrypt em vez de senha em texto puro salva no
+// navegador).
 function getPw(filial) {
   const key = 'bor_pw_' + filial;
   return localStorage.getItem(key) || DEFAULT_PW;
@@ -439,7 +478,12 @@ function setPw(filial, pw) {
   localStorage.setItem('bor_pw_' + filial, pw);
 }
 
-function doLogin() {
+function onFilialLoginChange() {
+  const filial = document.getElementById('selFilial').value;
+  document.getElementById('grpMatricula').style.display = (filial === 'corp') ? 'none' : 'block';
+}
+
+async function doLogin() {
   const filial = document.getElementById('selFilial').value;
   const senha = document.getElementById('inpSenha').value;
   const msg = document.getElementById('loginMsg');
@@ -448,21 +492,47 @@ function doLogin() {
   if (!filial) { msg.textContent = 'Selecione uma filial.'; msg.className = 'login-msg error'; return; }
   if (!senha) { msg.textContent = 'Digite a senha.'; msg.className = 'login-msg error'; return; }
 
-  const saved = getPw(filial);
-  if (senha !== saved) { msg.textContent = 'Senha incorreta.'; msg.className = 'login-msg error'; return; }
-
-  currentFilial = filial;
-
-  // Corp não precisa trocar senha, e se DEFAULT_PW não muda para corp
-  if (filial !== 'corp' && saved === DEFAULT_PW) {
-    // Forçar troca de senha
-    document.getElementById('loginScreen').style.display = 'none';
-    const cpw = document.getElementById('changePwScreen');
-    cpw.style.display = 'flex';
+  // ── Corp: fluxo antigo, sem mudança ──
+  if (filial === 'corp') {
+    const saved = getPw(filial);
+    if (senha !== saved) { msg.textContent = 'Senha incorreta.'; msg.className = 'login-msg error'; return; }
+    currentFilial = filial;
+    currentColaborador = null;
+    if (saved === DEFAULT_PW) {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('changePwScreen').style.display = 'flex';
+      return;
+    }
+    enterApp();
     return;
   }
 
-  enterApp();
+  // ── Filial de loja: matrícula + senha, validado no servidor ──
+  const matricula = (document.getElementById('inpMatricula').value || '').trim();
+  if (!matricula) { msg.textContent = 'Digite sua matrícula.'; msg.className = 'login-msg error'; return; }
+
+  try {
+    const resp = await fetch('/api/colaboradores/login', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ filial: filial.toUpperCase(), matricula, senha })
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      currentFilial = filial;
+      currentColaborador = { id: data.id, nome: data.nome };
+      enterApp();
+      return;
+    }
+    if (data.precisaVincular) {
+      abrirVinculo(filial, matricula, senha);
+      return;
+    }
+    msg.textContent = data.erro || 'Não foi possível entrar.';
+    msg.className = 'login-msg error';
+  } catch (e) {
+    msg.textContent = 'Erro de conexão com o servidor.';
+    msg.className = 'login-msg error';
+  }
 }
 
 function doChangePw() {
@@ -478,14 +548,73 @@ function doChangePw() {
 }
 
 function showForgot() {
-  const code = prompt('Digite o código de reset:');
-  if (code === RESET_CODE) {
-    const filial = document.getElementById('selFilial').value;
-    if (!filial) { alert('Selecione a filial primeiro.'); return; }
-    setPw(filial, DEFAULT_PW);
-    alert('Senha resetada para o padrão. Use "' + DEFAULT_PW + '" para entrar.');
-  } else {
-    alert('Código incorreto.');
+  const filial = document.getElementById('selFilial').value;
+  if (!filial) { alert('Selecione a filial primeiro.'); return; }
+  if (filial === 'corp') {
+    const code = prompt('Digite o código de reset:');
+    if (code === RESET_CODE) {
+      setPw(filial, DEFAULT_PW);
+      alert('Senha resetada para o padrão. Use "' + DEFAULT_PW + '" para entrar.');
+    } else {
+      alert('Código incorreto.');
+    }
+    return;
+  }
+  // Filial de loja: sem código mágico — quem reseta é o administrativo
+  // (aba Colaboradores, no modo corp), pra manter o controle de quem tem
+  // acesso a qual matrícula.
+  alert('Pra resetar sua senha, peça ao administrativo (Trade Marketing) pra resetar seu acesso na aba "Colaboradores" — depois disso você refaz o primeiro acesso com uma senha nova.');
+}
+
+// ── Primeiro acesso: vincular matrícula ao cadastro já existente ──
+async function abrirVinculo(filial, matricula, senha) {
+  _loginPendente = { filial: filial.toUpperCase(), matricula, senha };
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('vincMatriculaTxt').textContent = matricula;
+  const sel = document.getElementById('selVincularNome');
+  sel.innerHTML = '<option value="">Carregando…</option>';
+  document.getElementById('vincularMsg').textContent = '';
+  document.getElementById('vincularScreen').style.display = 'flex';
+  try {
+    const resp = await fetch('/api/colaboradores/sem-matricula?filial=' + _loginPendente.filial);
+    const lista = await resp.json();
+    if (!lista.length) {
+      sel.innerHTML = '<option value="">— nenhum cadastro pendente —</option>';
+      document.getElementById('vincularMsg').textContent = 'Não há colaboradores sem matrícula cadastrados nesta filial. Peça ao administrativo pra cadastrar seu nome na aba Colaboradores antes.';
+      return;
+    }
+    sel.innerHTML = '<option value="">— Selecione seu nome —</option>' + lista.map(function(c){
+      return '<option value="' + c.id + '">' + esc(c.nome) + (c.cargo ? ' — ' + esc(c.cargo) : '') + '</option>';
+    }).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">Erro ao carregar</option>';
+    document.getElementById('vincularMsg').textContent = 'Erro de conexão.';
+  }
+}
+function cancelarVinculo() {
+  _loginPendente = null;
+  document.getElementById('vincularScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+async function confirmarVinculo() {
+  const id = document.getElementById('selVincularNome').value;
+  const msg = document.getElementById('vincularMsg');
+  if (!id) { msg.textContent = 'Selecione seu nome.'; return; }
+  if (!_loginPendente) return;
+  try {
+    const resp = await fetch('/api/colaboradores/' + id + '/vincular', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ matricula: _loginPendente.matricula, senha: _loginPendente.senha })
+    });
+    const data = await resp.json();
+    if (!data.ok) { msg.textContent = data.erro || 'Erro ao vincular.'; return; }
+    currentFilial = _loginPendente.filial.toLowerCase();
+    currentColaborador = { id: data.id, nome: data.nome };
+    _loginPendente = null;
+    document.getElementById('vincularScreen').style.display = 'none';
+    enterApp();
+  } catch (e) {
+    msg.textContent = 'Erro de conexão.';
   }
 }
 
@@ -518,11 +647,14 @@ function enterApp() {
 
 function doLogout() {
   currentFilial = null;
+  currentColaborador = null;
   allAtendimentos = [];
   document.getElementById('appScreen').style.display = 'none';
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('selFilial').value = '';
+  document.getElementById('inpMatricula').value = '';
   document.getElementById('inpSenha').value = '';
+  document.getElementById('grpMatricula').style.display = 'block';
   document.getElementById('loginMsg').className = 'login-msg';
 }
 
@@ -1056,7 +1188,9 @@ function loadColaboradores() {
   }).catch(function(){ return []; }).then(function(data){
     window.__colaboradores = data || [];
     renderColaboradoresTable();
-    populateAtendenteSelect();
+    // 04/09/2026: pré-seleciona o atendente com quem está logado — ainda dá
+    // pra trocar manualmente (ex: cobrindo um colega), só é o padrão.
+    populateAtendenteSelect(undefined, currentColaborador ? currentColaborador.nome : undefined);
   });
 }
 
@@ -1067,13 +1201,41 @@ function renderColaboradoresTable() {
   var html = '';
   for (var i=0;i<list.length;i++) {
     var c = list[i];
-    html += '<tr><td>' + esc(c.nome) + '</td><td>' + esc(c.cargo||'') + '</td><td>' + esc(c.telefone||'') + '</td><td>' + esc(c.filial||'') + '</td><td>'
+    // 04/09/2026: coluna "Acesso" mostra se já vinculou matrícula/senha ou
+    // ainda tá pendente do primeiro acesso; "Resetar Acesso" só aparece no
+    // modo corp (administrativo) — reseta matrícula+senha sem apagar o
+    // cadastro nem nenhum atendimento já lançado em nome da pessoa.
+    var acesso = c.matricula
+      ? '<span style="color:#28a745;font-weight:600;">Vinculado (' + esc(c.matricula) + ')</span>'
+      : '<span style="color:#a08000;font-weight:600;">Pendente</span>';
+    // (id numérico só no onclick, igual editarColaborador/excluirColaborador
+    // já faziam — evita o problema de aspas de embutir o nome direto no
+    // atributo HTML; resetarAcessoColaborador busca o nome pelo id.)
+    var btnReset = (currentFilial === 'corp' && c.matricula)
+      ? '<button class="btn-rm-row" style="background:var(--secondary);margin-right:6px;" onclick="resetarAcessoColaborador(' + c.id + ')">Resetar Acesso</button>'
+      : '';
+    html += '<tr><td>' + esc(c.nome) + '</td><td>' + esc(c.cargo||'') + '</td><td>' + esc(c.telefone||'') + '</td><td>' + esc(c.filial||'') + '</td><td>' + acesso + '</td><td>'
+      + btnReset
       + '<button class="btn-rm-row" style="background:var(--primary);margin-right:6px;" onclick="editarColaborador(' + c.id + ')">Editar</button>'
       + '<button class="btn-rm-row" onclick="excluirColaborador(' + c.id + ')">Excluir</button></td></tr>';
   }
   tbody.innerHTML = html;
   var rc = document.getElementById('colabRecordsCount');
   if (rc) rc.textContent = list.length + ' registro(s)';
+}
+
+async function resetarAcessoColaborador(id) {
+  var c = (window.__colaboradores || []).find(function(x){ return x.id === id; });
+  var nome = c ? c.nome : 'este colaborador';
+  if (!confirm('Resetar o acesso de ' + nome + '? A matrícula e a senha atuais deixam de funcionar — ela(e) vai precisar refazer o primeiro acesso (escolher o nome de novo e definir uma senha nova). O cadastro e os atendimentos já lançados não são afetados.')) return;
+  try {
+    const resp = await fetch('/api/colaboradores/' + id + '/resetar-acesso', { method: 'POST' });
+    const data = await resp.json();
+    if (!data.ok) { alert(data.erro || 'Erro ao resetar acesso.'); return; }
+    loadColaboradores();
+  } catch (e) {
+    alert('Erro de conexão.');
+  }
 }
 
 function submitColaborador() {
