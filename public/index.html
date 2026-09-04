@@ -72,6 +72,22 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
   .actions-cell{display:flex;gap:6px;flex-wrap:wrap;}
   .btn-edit-row{background:var(--primary);color:#fff;border:none;border-radius:5px;padding:5px 9px;cursor:pointer;font-size:.78rem;}
   .btn-del-row{background:var(--danger);color:#fff;border:none;border-radius:5px;padding:5px 9px;cursor:pointer;font-size:.78rem;}
+  /* 04/09/2026: badge "Pendente" + botao "Dar Baixa" na celula de entrega -
+     acao dedicada, direto na lista, sem precisar abrir "Editar". */
+  .badge-pendente{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:#8a6d1f;}
+  .badge-pendente .dot{width:6px;height:6px;border-radius:50%;background:#e8a000;flex-shrink:0;}
+  .btn-baixa-row{background:var(--primary);color:#fff;border:none;border-radius:5px;padding:5px 9px;cursor:pointer;font-size:.78rem;margin-left:6px;}
+  .baixa-overlay{display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:16px;}
+  .baixa-overlay.on{display:flex;}
+  .baixa-box{background:#fff;border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.24);width:100%;max-width:360px;padding:22px;}
+  .baixa-box h3{margin:0 0 4px;font-size:1.05rem;color:#222;}
+  .baixa-box .sub{font-size:.82rem;color:var(--secondary);margin-bottom:16px;}
+  .baixa-box label{display:block;font-size:.78rem;font-weight:600;color:#555;margin-bottom:6px;}
+  .baixa-box input[type=date]{width:100%;height:36px;padding:0 10px;border:1px solid var(--border);border-radius:7px;font-size:.85rem;box-sizing:border-box;}
+  .baixa-box .botoes{display:flex;gap:10px;margin-top:18px;}
+  .baixa-box .botoes button{flex:1;height:38px;border-radius:7px;font-size:.85rem;font-weight:600;cursor:pointer;border:none;}
+  .baixa-box .btn-cancelar-baixa{background:#fff;border:1px solid var(--border) !important;color:#555;}
+  .baixa-box .btn-confirmar-baixa{background:var(--primary);color:#fff;}
   .edit-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff3cd;border:1px solid #ffe69c;color:#664d03;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:.9rem;}
 .btn-add-row{background:var(--primary);color:#fff;border:none;border-radius:7px;padding:9px 16px;cursor:pointer;font-size:.88rem;margin-top:10px;}
 .toalhas-counter{font-size:.82rem;color:var(--secondary);margin-top:6px;}
@@ -735,10 +751,13 @@ function renderTable(data) {
     const toalhaStr = toalhas.map(t => (t.qtde||1)+'x '+t.produto+(t.corToalha?(' ('+t.corToalha+')'):'')).join(', ') || '-';
     const createdAt = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR') : '';
     const tipoBadge = a.tipo_cli==='PF'?'badge-pf':a.tipo_cli==='PJ'?'badge-pj':'badge-func';
+    const celulaEntrega = a.data_entrega
+      ? a.data_entrega
+      : '<span class="badge-pendente"><span class="dot"></span>Pendente</span><button class="btn-baixa-row" onclick="abrirBaixa(' + a.id + ')" title="Dar baixa na entrega">✓ Dar Baixa</button>';
     return `<tr>
       <td>${a.id}</td>
       <td>${a.data_receb||''}</td>
-      <td>${a.data_entrega||''}</td>
+      <td>${celulaEntrega}</td>
       <td>${a.atendente||''}</td>
       <td>${a.nome_cliente||''}</td>
       <td>${a.ci||''}</td>
@@ -1450,6 +1469,62 @@ function renderDashboard() {
   setTimeout(function(){ applyDashOrderAndDnD(); setupDashboardInteractivity(); }, 400);
 }
 
+// ── Dar Baixa na Entrega (04/09/2026) ── ação dedicada: modal pequeno só
+// com a data, em vez de reabrir o formulário inteiro de "Editar". Usa o
+// mesmo endpoint PUT de sempre, preservando os demais campos já salvos.
+let _baixaId = null;
+function abrirBaixa(id) {
+  const a = allAtendimentos.find(x => x.id === id);
+  if (!a) { alert('Atendimento não encontrado.'); return; }
+  _baixaId = id;
+  document.getElementById('baixaCliente').textContent = (a.nome_cliente||'—') + (a.ci ? ' · CI ' + a.ci : '');
+  document.getElementById('baixaData').value = todayISO();
+  document.getElementById('baixaOverlay').classList.add('on');
+}
+function fecharBaixa() {
+  _baixaId = null;
+  document.getElementById('baixaOverlay').classList.remove('on');
+}
+async function confirmarBaixa() {
+  if (!_baixaId) return;
+  const data = document.getElementById('baixaData').value;
+  if (!data) { alert('Informe a data de retirada.'); return; }
+  const a = allAtendimentos.find(x => x.id === _baixaId);
+  if (!a) return;
+  const body = {
+    filial: a.filial, atendente: a.atendente, nomeCliente: a.nome_cliente,
+    ci: a.ci, cpf: a.cpf, tipoCli: a.tipo_cli,
+    dataReceb: a.data_receb, dataEntrega: isoToBR(data),
+    toalhas: Array.isArray(a.toalhas) ? a.toalhas : [],
+    produto: '', qtde: 0, corLinha: '', fonte: '', epi: false, motivoEpi: ''
+  };
+  try {
+    const resp = await fetch('/api/atendimentos/' + _baixaId, {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    localStorage.removeItem('bor_cache_' + (currentFilial==='corp'?'corp':currentFilial));
+    fecharBaixa();
+    allAtendimentos = [];
+    loadAtendimentos();
+  } catch(e) {
+    alert('Erro ao dar baixa: ' + e.message);
+  }
+}
+
 </script>
+<!-- ══ Dar Baixa na Entrega (04/09/2026) ══ -->
+<div class="baixa-overlay" id="baixaOverlay">
+  <div class="baixa-box">
+    <h3>Dar Baixa na Entrega</h3>
+    <div class="sub" id="baixaCliente"></div>
+    <label>Data em que o cliente retirou as toalhas</label>
+    <input type="date" id="baixaData">
+    <div class="botoes">
+      <button class="btn-cancelar-baixa" onclick="fecharBaixa()">Cancelar</button>
+      <button class="btn-confirmar-baixa" onclick="confirmarBaixa()">Confirmar retirada</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
