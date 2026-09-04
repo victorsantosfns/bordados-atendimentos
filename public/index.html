@@ -1089,7 +1089,10 @@ async function renderDashboardOriginal() {
   const prazos = data.filter(a=>a.data_receb&&a.data_entrega).map(a=>diffDays(a.data_receb,a.data_entrega));
   const prazoMed = prazos.length ? (prazos.reduce((s,v)=>s+v,0)/prazos.length).toFixed(1) : '-';
 
+  // 04/09/2026, pedido do Victor: "dar baixa" não exclui nada, só marca a
+  // entrega — precisa contar em algum lugar visível como toalhas entregues.
   let totalToalhas = 0;
+  let totalToalhasEntregues = 0;
   const diasReceb = {};
   const prodKpiCount = {};
   const diaSemanaKpiCount = {};
@@ -1097,9 +1100,11 @@ async function renderDashboardOriginal() {
   data.forEach(a => {
     const toalhasArr = Array.isArray(a.toalhas) ? a.toalhas : [];
     toalhasArr.forEach(t => {
-      totalToalhas += Number(t.qtde)||1;
+      const q = Number(t.qtde)||1;
+      totalToalhas += q;
+      if (a.data_entrega) totalToalhasEntregues += q;
       const p = t.produto || '?';
-      prodKpiCount[p] = (prodKpiCount[p]||0) + (Number(t.qtde)||1);
+      prodKpiCount[p] = (prodKpiCount[p]||0) + q;
     });
     const isoKpi = brToISO(a.data_receb||'');
     if (isoKpi) {
@@ -1122,6 +1127,7 @@ async function renderDashboardOriginal() {
     <div class="kpi-card"><div class="kpi-value">${prazoMed}</div><div class="kpi-label">Prazo Médio (dias)</div></div>
     <div class="kpi-card"><div class="kpi-value">${producaoDiaria}</div><div class="kpi-label">Produção Diária (média)</div></div>
     <div class="kpi-card"><div class="kpi-value">${totalToalhas}</div><div class="kpi-label">Toalhas Recebidas</div></div>
+    <div class="kpi-card"><div class="kpi-value" style="color:var(--success);">${totalToalhasEntregues}</div><div class="kpi-label">Toalhas Entregues</div></div>
     <div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">${modeloMaisBordado}</div><div class="kpi-label">Modelo Mais Bordado</div></div>
     <div class="kpi-card"><div class="kpi-value" style="font-size:1.1rem;">${diaSemanaTopNome}</div><div class="kpi-label">Dia com Mais Recebimentos</div></div>
   `;
