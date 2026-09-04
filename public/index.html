@@ -230,9 +230,16 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
           <label>Atendente *</label>
           <select id="frmAtendente" required><option value="">— Selecione o atendente —</option></select>
         </div>
-        <div class="form-group">
-          <label>Data Entrega *</label>
-          <input type="date" id="frmDataEntrega" required/>
+        <!-- 04/09/2026, pedido do Victor: a data de entrega não é mais
+             obrigatória nem aparece no cadastro de um atendimento novo — o
+             fluxo real é (1) cliente deixa as toalhas, (2) atendente cadastra
+             CI/serviço com a entrega em aberto, (3) cliente volta, (4)
+             atendente DÁ BAIXA nesse momento (reabre o atendimento em
+             "Editar" e só aí preenche a data de entrega real). Esse grupo só
+             aparece em modo de edição — ver initForm()/editarAtendimento(). -->
+        <div class="form-group" id="grp-data-entrega" style="display:none;">
+          <label>Data Entrega</label>
+          <input type="date" id="frmDataEntrega"/>
         </div>
         <div class="form-group">
           <label>Nome do Cliente *</label>
@@ -516,7 +523,11 @@ function showTab(n) {
 // ─── FORM (ABA 1) ─────────────────────────────────────────────────────────────
 function initForm() {
   document.getElementById('frmDataReceb').value = todayISO();
-  document.getElementById('frmDataEntrega').value = addDays(todayISO(), 3);
+  // 04/09/2026: não chuta mais uma data de entrega (+3 dias) — o campo fica
+  // vazio e escondido num atendimento novo, só aparece de novo quando o
+  // atendente abre "Editar" pra dar baixa na entrega de verdade.
+  document.getElementById('frmDataEntrega').value = '';
+  document.getElementById('grp-data-entrega').style.display = 'none';
   document.getElementById('toalhasTbody').innerHTML = '';
   updateCounter();
   addToalhaRow();
@@ -628,7 +639,8 @@ async function submitAtendimento() {
 
   if (!dataReceb) { showMsg('formMsg','error','Informe a data de recebimento.'); return; }
   if (!atendente) { showMsg('formMsg','error','Informe o atendente.'); return; }
-  if (!dataEntrega) { showMsg('formMsg','error','Informe a data de entrega.'); return; }
+  // 04/09/2026: data de entrega não é mais obrigatória — fica em aberto até
+  // o atendente dar baixa (editar o atendimento) quando o cliente retornar.
   if (!nomeCliente) { showMsg('formMsg','error','Informe o nome do cliente.'); return; }
 
 const filial = editingId
@@ -762,6 +774,9 @@ function renderTable(data) {
 
     document.getElementById('frmDataReceb').value = brToISO(a.data_receb);
     populateAtendenteSelect(a.filial, a.atendente || '');
+    // 04/09/2026: campo de entrega só aparece no modo edição — é aqui que o
+    // atendente "dá baixa" na entrega quando o cliente volta pra buscar.
+    document.getElementById('grp-data-entrega').style.display = '';
     document.getElementById('frmDataEntrega').value = brToISO(a.data_entrega);
     document.getElementById('frmNomeCliente').value = a.nome_cliente || '';
     document.getElementById('frmCi').value = a.ci || '';
