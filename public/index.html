@@ -78,7 +78,10 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
      acao dedicada, direto na lista, sem precisar abrir "Editar". */
   .badge-pendente{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:#8a6d1f;}
   .badge-pendente .dot{width:6px;height:6px;border-radius:50%;background:#e8a000;flex-shrink:0;}
+  .badge-entregue{display:inline-flex;align-items:center;gap:5px;font-size:.72rem;color:#1f7a34;font-weight:600;}
+  .badge-entregue .dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex-shrink:0;}
   .btn-baixa-row{background:var(--primary);color:#fff;border:none;border-radius:5px;padding:5px 9px;cursor:pointer;font-size:.78rem;margin-left:6px;}
+  .btn-baixa-row.alterar{background:var(--success);}
   .baixa-overlay{display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:16px;}
   .baixa-overlay.on{display:flex;}
   .baixa-box{background:#fff;border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,.24);width:100%;max-width:360px;padding:22px;}
@@ -372,6 +375,14 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
   </div>
 
   <div class="tab-content" id="tab4">
+    <!-- 04/09/2026, pedido do Victor: filtro de mês no dashboard — opções
+         geradas a partir dos meses que realmente têm atendimento (ver
+         popularFiltroMesDash em renderDashboardOriginal). -->
+    <div class="table-toolbar">
+      <select id="dashFiltroMes" onchange="renderDashboard()">
+        <option value="">Todos os Meses</option>
+      </select>
+    </div>
     <div class="kpi-grid" id="kpiGrid"></div>
     <div class="charts-grid" id="chartsGrid"></div>
   </div>
@@ -883,8 +894,11 @@ function renderTable(data) {
     const toalhaStr = toalhas.map(t => (t.qtde||1)+'x '+t.produto+(t.corToalha?(' ('+t.corToalha+')'):'')).join(', ') || '-';
     const createdAt = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR') : '';
     const tipoBadge = a.tipo_cli==='PF'?'badge-pf':a.tipo_cli==='PJ'?'badge-pj':'badge-func';
+    // 04/09/2026, pedido do Victor: status "já entregue" também tem botão,
+    // igual o "Pendente" já tinha — abre o mesmo modal pra corrigir a data
+    // ou desfazer a baixa.
     const celulaEntrega = a.data_entrega
-      ? a.data_entrega
+      ? '<span class="badge-entregue"><span class="dot"></span>' + a.data_entrega + '</span><button class="btn-baixa-row alterar" onclick="abrirBaixa(' + a.id + ')" title="Alterar data de entrega">✎ Alterar</button>'
       : '<span class="badge-pendente"><span class="dot"></span>Pendente</span><button class="btn-baixa-row" onclick="abrirBaixa(' + a.id + ')" title="Dar baixa na entrega">✓ Dar Baixa</button>';
     return `<tr>
       <td>${a.id}</td>
@@ -1042,6 +1056,32 @@ async function renderDashboardOriginal() {
       data = await resp.json();
       allAtendimentos = data;
     } catch(e) { kpiGrid.innerHTML = '<p class="no-results">Erro ao carregar dados.</p>'; return; }
+  }
+
+  // 04/09/2026, pedido do Victor: filtro de mês do dashboard. Popula o
+  // select com os meses que realmente têm atendimento (não uma lista fixa
+  // Jan–Dez) e, se um mês estiver selecionado, filtra TUDO que vem depois
+  // (KPIs + todos os gráficos) por ele — baseado em Data de Recebimento,
+  // mesmo campo que já era usado pros KPIs de produção diária/dia da semana.
+  const selMes = document.getElementById('dashFiltroMes');
+  if (selMes) {
+    const NOMES_MES_FILTRO = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const mesesDisponiveis = Array.from(new Set(data.map(a => {
+      const iso = brToISO(a.data_receb||''); return iso ? iso.slice(0,7) : null;
+    }).filter(Boolean))).sort();
+    const valorAtual = selMes.value;
+    selMes.innerHTML = '<option value="">Todos os Meses</option>' + mesesDisponiveis.map(k => {
+      const p = k.split('-');
+      return '<option value="' + k + '">' + NOMES_MES_FILTRO[parseInt(p[1],10)-1] + '/' + p[0] + '</option>';
+    }).join('');
+    if (mesesDisponiveis.includes(valorAtual)) selMes.value = valorAtual;
+  }
+  const mesFiltroDash = selMes ? selMes.value : '';
+  if (mesFiltroDash) {
+    data = data.filter(a => {
+      const iso = brToISO(a.data_receb||'');
+      return iso && iso.slice(0,7) === mesFiltroDash;
+    });
   }
 
   // ── KPIs ──
@@ -1640,32 +1680,43 @@ function abrirBaixa(id) {
   if (!a) { alert('Atendimento não encontrado.'); return; }
   _baixaId = id;
   document.getElementById('baixaCliente').textContent = (a.nome_cliente||'—') + (a.ci ? ' · CI ' + a.ci : '');
-  document.getElementById('baixaData').value = todayISO();
+  // 04/09/2026: se já tem entrega, o modal serve pra CORRIGIR a data (ou
+  // desfazer, botão abaixo) — pré-preenche com o que já tá salvo (convertendo
+  // de dd/mm/aaaa pra aaaa-mm-dd, formato do <input type=date>) em vez de
+  // sempre chutar hoje.
+  document.getElementById('baixaData').value = a.data_entrega ? brToISO(a.data_entrega) : todayISO();
+  document.getElementById('baixaTitulo').textContent = a.data_entrega ? 'Alterar Data de Entrega' : 'Dar Baixa na Entrega';
+  document.getElementById('baixaBtnConfirmar').textContent = a.data_entrega ? 'Salvar alteração' : 'Confirmar retirada';
+  document.getElementById('baixaDesfazer').style.display = a.data_entrega ? 'block' : 'none';
   document.getElementById('baixaOverlay').classList.add('on');
 }
 function fecharBaixa() {
   _baixaId = null;
   document.getElementById('baixaOverlay').classList.remove('on');
 }
+async function _baixaSalvarEntrega(dataEntregaBR) {
+  const a = allAtendimentos.find(x => x.id === _baixaId);
+  if (!a) return false;
+  const body = {
+    filial: a.filial, atendente: a.atendente, nomeCliente: a.nome_cliente,
+    ci: a.ci, cpf: a.cpf, tipoCli: a.tipo_cli,
+    dataReceb: a.data_receb, dataEntrega: dataEntregaBR,
+    toalhas: Array.isArray(a.toalhas) ? a.toalhas : [],
+    produto: '', qtde: 0, corLinha: '', fonte: '', epi: false, motivoEpi: ''
+  };
+  const resp = await fetch('/api/atendimentos/' + _baixaId, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  if (!resp.ok) throw new Error(await resp.text());
+  localStorage.removeItem('bor_cache_' + (currentFilial==='corp'?'corp':currentFilial));
+  return true;
+}
 async function confirmarBaixa() {
   if (!_baixaId) return;
   const data = document.getElementById('baixaData').value;
   if (!data) { alert('Informe a data de retirada.'); return; }
-  const a = allAtendimentos.find(x => x.id === _baixaId);
-  if (!a) return;
-  const body = {
-    filial: a.filial, atendente: a.atendente, nomeCliente: a.nome_cliente,
-    ci: a.ci, cpf: a.cpf, tipoCli: a.tipo_cli,
-    dataReceb: a.data_receb, dataEntrega: isoToBR(data),
-    toalhas: Array.isArray(a.toalhas) ? a.toalhas : [],
-    produto: '', qtde: 0, corLinha: '', fonte: '', epi: false, motivoEpi: ''
-  };
   try {
-    const resp = await fetch('/api/atendimentos/' + _baixaId, {
-      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    localStorage.removeItem('bor_cache_' + (currentFilial==='corp'?'corp':currentFilial));
+    await _baixaSalvarEntrega(isoToBR(data));
     fecharBaixa();
     allAtendimentos = [];
     loadAtendimentos();
@@ -1673,18 +1724,35 @@ async function confirmarBaixa() {
     alert('Erro ao dar baixa: ' + e.message);
   }
 }
+// Desfaz a baixa (volta pra "Pendente") — pra quando a data foi confirmada
+// por engano.
+async function desfazerBaixa() {
+  if (!_baixaId) return;
+  if (!confirm('Desfazer a baixa e voltar este atendimento pra "Pendente"?')) return;
+  try {
+    await _baixaSalvarEntrega('');
+    fecharBaixa();
+    allAtendimentos = [];
+    loadAtendimentos();
+  } catch(e) {
+    alert('Erro ao desfazer: ' + e.message);
+  }
+}
 
 </script>
 <!-- ══ Dar Baixa na Entrega (04/09/2026) ══ -->
 <div class="baixa-overlay" id="baixaOverlay">
   <div class="baixa-box">
-    <h3>Dar Baixa na Entrega</h3>
+    <h3 id="baixaTitulo">Dar Baixa na Entrega</h3>
     <div class="sub" id="baixaCliente"></div>
     <label>Data em que o cliente retirou as toalhas</label>
     <input type="date" id="baixaData">
     <div class="botoes">
       <button class="btn-cancelar-baixa" onclick="fecharBaixa()">Cancelar</button>
-      <button class="btn-confirmar-baixa" onclick="confirmarBaixa()">Confirmar retirada</button>
+      <button class="btn-confirmar-baixa" id="baixaBtnConfirmar" onclick="confirmarBaixa()">Confirmar retirada</button>
+    </div>
+    <div id="baixaDesfazer" style="display:none;text-align:center;margin-top:10px">
+      <span style="font-size:.78rem;color:var(--danger);cursor:pointer;text-decoration:underline" onclick="desfazerBaixa()">✕ Desfazer baixa (voltar pra Pendente)</span>
     </div>
   </div>
 </div>
