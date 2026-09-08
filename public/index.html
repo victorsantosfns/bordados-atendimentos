@@ -691,15 +691,19 @@ function enterApp() {
   mostrarModalFluxoSePreciso();
 }
 
-// Aviso temporário do novo fluxo (dar baixa) — vigora até 11/09/2026, um
-// aviso por login (não reaparece se a pessoa só trocar de aba dentro da
-// mesma sessão).
-var _modalFluxoMostradoNestaSessao = false;
+// Aviso temporário do novo fluxo (dar baixa) — vigora até 11/09/2026, uma
+// vez por sessão de navegador. Guardado no sessionStorage (não numa variável
+// em memória, nem no localStorage): sessionStorage sobrevive a um F5 — então
+// atualizar a página não reexibe o aviso, como pedido — mas é limpo quando a
+// aba/navegador fecha, então um login de verdade em uma sessão nova volta a
+// mostrar (diferente do localStorage, que mostraria só 1x para sempre no
+// aparelho, mesmo pra outro atendente logando depois).
 function mostrarModalFluxoSePreciso() {
   var HOJE = new Date();
   var LIMITE = new Date(2026, 8, 11, 23, 59, 59); // 11/09/2026, mês 8 = setembro (0-indexado)
-  if (_modalFluxoMostradoNestaSessao || HOJE > LIMITE) return;
-  _modalFluxoMostradoNestaSessao = true;
+  if (HOJE > LIMITE) return;
+  if (sessionStorage.getItem('bor_modalFluxoVisto')) return;
+  sessionStorage.setItem('bor_modalFluxoVisto', '1');
   document.getElementById('modalFluxoOverlay').style.display = 'flex';
 }
 function fecharModalFluxo() {
