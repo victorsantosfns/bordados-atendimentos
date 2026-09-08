@@ -41,6 +41,15 @@ body{font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--t
 .btn-changepw{width:100%;padding:11px;background:var(--primary);color:#fff;border:none;border-radius:7px;font-size:1rem;font-weight:600;cursor:pointer;}
 .btn-changepw:hover{background:var(--primary-dark);}
 #changePwMsg{margin-top:10px;font-size:.88rem;color:var(--danger);}
+#modalFluxoOverlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center;padding:20px;}
+.modal-fluxo-card{background:var(--card);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.3);width:100%;max-width:460px;max-height:90vh;overflow-y:auto;}
+.modal-fluxo-card .changepw-header p{font-size:.82rem;opacity:.85;margin-top:4px;}
+.fluxo-passos{list-style:none;counter-reset:passo;margin-bottom:8px;}
+.fluxo-passos li{counter-increment:passo;display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);}
+.fluxo-passos li:last-child{border-bottom:none;}
+.fluxo-passos li::before{content:counter(passo);flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;font-weight:700;font-size:.9rem;display:flex;align-items:center;justify-content:center;}
+.fluxo-passos li span{font-size:.92rem;line-height:1.4;padding-top:3px;}
+.fluxo-destaque{background:#fff6e5;border-left:3px solid #d9a300;padding:10px 12px;border-radius:6px;font-size:.85rem;color:#5c4500;margin-bottom:16px;}
 .app-header{background:var(--primary);color:#fff;padding:0 24px;height:60px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.2);position:sticky;top:0;z-index:100;}
 .app-header .header-icon{width:32px;height:32px;flex-shrink:0;filter:brightness(0) invert(1);}
 .app-header .app-title{font-size:1.15rem;font-weight:700;letter-spacing:2px;}
@@ -233,6 +242,31 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
       <input type="password" id="inpConfSenha" placeholder="Confirme a senha"/>
       <button class="btn-changepw" onclick="doChangePw()">Salvar Senha</button>
       <div id="changePwMsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Aviso do novo fluxo de atendimento (temporário, 08/09 a 11/09/2026) ══
+     Pedido do Victor: informar o time sobre a mudança (Data de Entrega deixou
+     de ser obrigatória no cadastro, agora é preenchida só no "Dar Baixa").
+     Aparece uma vez por login enquanto a data de hoje estiver dentro do
+     prazo; depois de 11/09/2026 para de aparecer sozinho. ══ -->
+<div id="modalFluxoOverlay">
+  <div class="modal-fluxo-card">
+    <div class="changepw-header">
+      <h2>Novo fluxo de atendimento</h2>
+      <p>Fique atento à mudança no jeito de lançar e concluir um atendimento</p>
+    </div>
+    <div class="changepw-body">
+      <ol class="fluxo-passos">
+        <li><span>Cliente deixa as toalhas para bordar com a nota ou CI.</span></li>
+        <li><span>Atendente cadastra a CI e o serviço a ser feito.</span></li>
+        <li><span>Fica a data da entrega em aberto.</span></li>
+        <li><span>Cliente retorna e pega as toalhas.</span></li>
+        <li><span>Atendente faz a conclusão da entrega neste momento e dá baixa na plataforma.</span></li>
+      </ol>
+      <div class="fluxo-destaque">A Data de Entrega não é mais preenchida no cadastro — só depois, no botão "Dar Baixa" de cada atendimento.</div>
+      <button class="btn-changepw" onclick="fecharModalFluxo()">Entendi</button>
     </div>
   </div>
 </div>
@@ -654,6 +688,22 @@ function enterApp() {
   initForm();
   loadAtendimentos();
   loadColaboradores();
+  mostrarModalFluxoSePreciso();
+}
+
+// Aviso temporário do novo fluxo (dar baixa) — vigora até 11/09/2026, um
+// aviso por login (não reaparece se a pessoa só trocar de aba dentro da
+// mesma sessão).
+var _modalFluxoMostradoNestaSessao = false;
+function mostrarModalFluxoSePreciso() {
+  var HOJE = new Date();
+  var LIMITE = new Date(2026, 8, 11, 23, 59, 59); // 11/09/2026, mês 8 = setembro (0-indexado)
+  if (_modalFluxoMostradoNestaSessao || HOJE > LIMITE) return;
+  _modalFluxoMostradoNestaSessao = true;
+  document.getElementById('modalFluxoOverlay').style.display = 'flex';
+}
+function fecharModalFluxo() {
+  document.getElementById('modalFluxoOverlay').style.display = 'none';
 }
 
 function doLogout() {
