@@ -5,6 +5,11 @@ const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
+// 08/09/2026, pedido do Victor: toda matricula vinculada pela primeira vez
+// (e o proprio corp, ver DEFAULT_PW no front) comeca com esta senha unica,
+// e a pessoa e obrigada a trocar logo em seguida (ver senha_temporaria).
+const SENHA_PADRAO_COLABORADOR = 'bordados2026';
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -66,6 +71,13 @@ async function initDB() {
           // (varios NULL sao permitidos num indice unico parcial).
           await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS colaboradores_filial_matricula_uniq
                              ON colaboradores(filial, matricula) WHERE matricula IS NOT NULL`);
+          // 08/09/2026, pedido do Victor: todo primeiro acesso recebe a MESMA
+          // senha padrao (SENHA_PADRAO_COLABORADOR) em vez do colaborador
+          // escolher a propria senha na hora - e fica marcado como temporaria
+          // ate a pessoa trocar por uma senha propria (ver /login e
+          // /trocar-senha). Sem coluna nenhum colaborador antigo e afetado
+          // (fica FALSE, ou seja, ja tem senha definitiva).
+          await pool.query(`ALTER TABLE colaboradores ADD COLUMN IF NOT EXISTS senha_temporaria BOOLEAN DEFAULT FALSE`);
           console.log('Tabelas prontas.');
     } catch (err) {
           console.error('Erro ao inicializar banco:', err.message);
@@ -211,15 +223,16 @@ app.post('/api/colaboradores/login', async (req, res) => {
     const colab = result.rows[0];
     if (!colab.senha_hash) {
       // Matricula ja tinha sido gravada nesse colaborador mas sem senha
-      // ainda definida (estado intermediario) - define agora com a senha
-      // informada.
-      const hash = await bcrypt.hash(senha, 10);
-      await pool.query(`UPDATE colaboradores SET senha_hash=$1 WHERE id=$2`, [hash, colab.id]);
-      return res.json({ ok: true, id: colab.id, nome: colab.nome, filial: colab.filial, cargo: colab.cargo });
+      // ainda definida (estado intermediario, nao deveria acontecer no fluxo
+      // normal ja que /vincular grava os dois juntos) - aplica a senha
+      // padrao aqui tambem, por consistencia, ignorando o que foi digitado.
+      const hash = await bcrypt.hash(SENHA_PADRAO_COLABORADOR, 10);
+      await pool.query(`UPDATE colaboradores SET senha_hash=$1, senha_temporaria=TRUE WHERE id=$2`, [hash, colab.id]);
+      return res.json({ ok: true, id: colab.id, nome: colab.nome, filial: colab.filial, cargo: colab.cargo, precisaTrocarSenha: true });
     }
     const confere = await bcrypt.compare(senha, colab.senha_hash);
     if (!confere) return res.status(401).json({ ok: false, erro: 'Senha incorreta.' });
-    res.json({ ok: true, id: colab.id, nome: colab.nome, filial: colab.filial, cargo: colab.cargo });
+    res.json({ ok: true, id: colab.id, nome: colab.nome, filial: colab.filial, cargo: colab.cargo, precisaTrocarSenha: !!colab.senha_temporaria });
   } catch (err) {
     console.error('POST colaboradores/login error:', err.message);
     res.status(500).json({ ok: false, erro: err.message });
@@ -245,31 +258,61 @@ app.get('/api/colaboradores/sem-matricula', async (req, res) => {
   }
 });
 
-// Vincula matricula + senha a um cadastro de colaborador ja existente
-// (primeiro acesso de alguem dos 33 que ja estavam cadastrados só pelo
-// nome). Nao cria registro novo nem mexe em nenhum atendimento ja lancado -
-// so completa o cadastro que ja existia.
+// Vincula matricula a um cadastro de colaborador ja existente (primeiro
+// acesso de alguem dos 33 que ja estavam cadastrados só pelo nome). Nao cria
+// registro novo nem mexe em nenhum atendimento ja lancado - so completa o
+// cadastro que ja existia. A senha NAO vem do colaborador (pedido do Victor,
+// 08/09/2026) - todo mundo comeca com SENHA_PADRAO_COLABORADOR e e forcado a
+// trocar logo depois (ver senha_temporaria, checado no /login e usado pelo
+// front pra abrir a tela "Trocar Senha" antes de liberar o app).
 app.post('/api/colaboradores/:id/vincular', async (req, res) => {
   try {
     const { id } = req.params;
-    const { matricula, senha } = req.body;
-    if (!matricula || !senha) return res.status(400).json({ ok: false, erro: 'Informe matricula e senha.' });
-    if (senha.length < 6) return res.status(400).json({ ok: false, erro: 'Senha precisa ter no minimo 6 caracteres.' });
+    const { matricula } = req.body;
+    if (!matricula) return res.status(400).json({ ok: false, erro: 'Informe a matricula.' });
     const existe = await pool.query('SELECT id FROM colaboradores WHERE id=$1', [id]);
     if (!existe.rows.length) return res.status(404).json({ ok: false, erro: 'Colaborador nao encontrado.' });
-    const hash = await bcrypt.hash(senha, 10);
+    const hash = await bcrypt.hash(SENHA_PADRAO_COLABORADOR, 10);
     try {
       const result = await pool.query(
-        `UPDATE colaboradores SET matricula=$1, senha_hash=$2 WHERE id=$3 RETURNING id, nome, filial, cargo`,
+        `UPDATE colaboradores SET matricula=$1, senha_hash=$2, senha_temporaria=TRUE WHERE id=$3 RETURNING id, nome, filial, cargo`,
         [matricula.trim(), hash, id]
       );
-      res.json({ ok: true, ...result.rows[0] });
+      res.json({ ok: true, ...result.rows[0], precisaTrocarSenha: true });
     } catch (e) {
       if (e.code === '23505') return res.status(409).json({ ok: false, erro: 'Essa matricula ja esta em uso nesta filial.' });
       throw e;
     }
   } catch (err) {
     console.error('POST colaboradores/vincular error:', err.message);
+    res.status(500).json({ ok: false, erro: err.message });
+  }
+});
+
+// Troca de senha (fluxo obrigatorio apos vincular/receber a senha padrao, ou
+// uso espontaneo depois). Exige a senha atual pra confirmar identidade -
+// nesse app sem sessao/token, e a unica trava real contra alguem trocar a
+// senha de outro colaborador so sabendo o id (que nao e secreto, aparece na
+// listagem publica de colaboradores).
+app.post('/api/colaboradores/:id/trocar-senha', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { senhaAtual, senhaNova } = req.body;
+    if (!senhaAtual || !senhaNova) return res.status(400).json({ ok: false, erro: 'Informe a senha atual e a nova senha.' });
+    if (senhaNova.length < 6) return res.status(400).json({ ok: false, erro: 'A nova senha precisa ter no minimo 6 caracteres.' });
+    if (senhaNova === SENHA_PADRAO_COLABORADOR) return res.status(400).json({ ok: false, erro: 'Escolha uma senha diferente da senha padrao.' });
+
+    const result = await pool.query('SELECT senha_hash FROM colaboradores WHERE id=$1', [id]);
+    if (!result.rows.length) return res.status(404).json({ ok: false, erro: 'Colaborador nao encontrado.' });
+
+    const confere = await bcrypt.compare(senhaAtual, result.rows[0].senha_hash || '');
+    if (!confere) return res.status(401).json({ ok: false, erro: 'Senha atual incorreta.' });
+
+    const hash = await bcrypt.hash(senhaNova, 10);
+    await pool.query(`UPDATE colaboradores SET senha_hash=$1, senha_temporaria=FALSE WHERE id=$2`, [hash, id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST colaboradores/trocar-senha error:', err.message);
     res.status(500).json({ ok: false, erro: err.message });
   }
 });
