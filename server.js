@@ -491,7 +491,7 @@ app.post('/api/leads-fesindico', async (req, res) => {
       `INSERT INTO leads_fesindico
        (tipo, cnpj, cnpj_encontrado, nome_empresa, cidade, nome_contato,
         whatsapp, telefone, email, segmento, produtos, oportunidade, urgencia, atualizar_dados)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)
        RETURNING id`,
       [
         tipo, cnpj || null, cnpjEncontrado === undefined ? null : !!cnpjEncontrado,
