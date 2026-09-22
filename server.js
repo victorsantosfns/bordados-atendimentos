@@ -6,9 +6,16 @@ const path = require('path');
 const bcrypt = require('bcryptjs');
 
 // 08/09/2026, pedido do Victor: toda matricula vinculada pela primeira vez
-// (e o proprio corp, ver DEFAULT_PW no front) comeca com esta senha unica,
-// e a pessoa e obrigada a trocar logo em seguida (ver senha_temporaria).
-const SENHA_PADRAO_COLABORADOR = 'bordados2026';
+// comeca com esta senha unica, e a pessoa e obrigada a trocar logo em
+// seguida (ver senha_temporaria). 23/09/2026, achado do QA (Coringa): este
+// repositorio e publico no GitHub — nunca mais hardcode aqui, configure
+// SENHA_PADRAO_COLABORADOR nas variaveis de ambiente do Render. O fallback
+// so existe pra nao quebrar em dev local sem .env; troque a env var em
+// producao mesmo que o fallback pareca "funcionar".
+const SENHA_PADRAO_COLABORADOR = process.env.SENHA_PADRAO_COLABORADOR || 'bordados2026';
+// 23/09/2026, mesmo achado: codigo de reset da senha "corp" tambem estava
+// hardcoded (era o mesmo texto de SENHA_PADRAO_COLABORADOR).
+const RESET_CODE_CORP = process.env.RESET_CODE_CORP || 'bordados2026';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -78,6 +85,29 @@ async function initDB() {
           // /trocar-senha). Sem coluna nenhum colaborador antigo e afetado
           // (fica FALSE, ou seja, ja tem senha definitiva).
           await pool.query(`ALTER TABLE colaboradores ADD COLUMN IF NOT EXISTS senha_temporaria BOOLEAN DEFAULT FALSE`);
+
+          // 23/09/2026, achado do QA (Coringa): login "corp" (administrativo)
+          // era validado só no navegador, com a senha guardada em texto puro
+          // no localStorage — qualquer um abre o DevTools e entra sem senha
+          // real nenhuma. Migra pra validação no servidor, mesmo padrão de
+          // hash bcrypt já usado pros colaboradores de filial. Tabela
+          // genérica (chave/valor) porque é a única config assim por ora.
+          await pool.query(`CREATE TABLE IF NOT EXISTS config_sistema (chave TEXT PRIMARY KEY, valor TEXT)`);
+          const corpCfg = await pool.query(`SELECT valor FROM config_sistema WHERE chave = 'senha_corp_hash'`);
+          if (!corpCfg.rows.length) {
+            // Semente inicial: mesma senha que já era o padrão de fato hoje
+            // (bor_pw_corp no localStorage começava com '123456') — marcada
+            // temporária, então quem entrar primeiro já é forçado a trocar.
+            const hashCorp = await bcrypt.hash('123456', 10);
+            await pool.query(
+              `INSERT INTO config_sistema (chave, valor) VALUES ('senha_corp_hash', $1) ON CONFLICT DO NOTHING`,
+              [hashCorp]
+            );
+            await pool.query(
+              `INSERT INTO config_sistema (chave, valor) VALUES ('senha_corp_temporaria', 'true') ON CONFLICT DO NOTHING`
+            );
+          }
+
           console.log('Tabelas prontas.');
 
           // 22/09/2026, pedido do Victor: app de captação de leads pra
@@ -301,24 +331,39 @@ app.get('/api/colaboradores/sem-matricula', async (req, res) => {
 // Vincula matricula a um cadastro de colaborador ja existente (primeiro
 // acesso de alguem dos 33 que ja estavam cadastrados só pelo nome). Nao cria
 // registro novo nem mexe em nenhum atendimento ja lancado - so completa o
-// cadastro que ja existia. A senha NAO vem do colaborador (pedido do Victor,
-// 08/09/2026) - todo mundo comeca com SENHA_PADRAO_COLABORADOR e e forcado a
-// trocar logo depois (ver senha_temporaria, checado no /login e usado pelo
-// front pra abrir a tela "Trocar Senha" antes de liberar o app).
+// cadastro que ja existia. 23/09/2026: o front agora pede a senha nova já
+// nesta etapa (senhaNova), em vez de vincular com SENHA_PADRAO_COLABORADOR
+// e depender do client reenviar esse valor pra trocar em seguida - evita o
+// estado intermediario "senha padrao temporaria". Sem senhaNova (chamada
+// antiga/compat), mantem o comportamento anterior.
 app.post('/api/colaboradores/:id/vincular', async (req, res) => {
   try {
     const { id } = req.params;
-    const { matricula } = req.body;
+    const { matricula, senhaNova } = req.body;
     if (!matricula) return res.status(400).json({ ok: false, erro: 'Informe a matricula.' });
     const existe = await pool.query('SELECT id FROM colaboradores WHERE id=$1', [id]);
     if (!existe.rows.length) return res.status(404).json({ ok: false, erro: 'Colaborador nao encontrado.' });
-    const hash = await bcrypt.hash(SENHA_PADRAO_COLABORADOR, 10);
+    // 23/09/2026, achado do Coringa (2ª validação): faltava o mesmo guard
+    // que /trocar-senha já tem — sem isso, quem digitasse a própria senha
+    // padrão como "senha nova" ficaria permanentemente nela, sem nunca ser
+    // forçado a trocar.
+    if (senhaNova && senhaNova.length >= 6 && senhaNova === SENHA_PADRAO_COLABORADOR) {
+      return res.status(400).json({ ok: false, erro: 'Escolha uma senha diferente da senha padrão.' });
+    }
+    let hash, temporaria;
+    if (senhaNova && senhaNova.length >= 6) {
+      hash = await bcrypt.hash(senhaNova, 10);
+      temporaria = false;
+    } else {
+      hash = await bcrypt.hash(SENHA_PADRAO_COLABORADOR, 10);
+      temporaria = true;
+    }
     try {
       const result = await pool.query(
-        `UPDATE colaboradores SET matricula=$1, senha_hash=$2, senha_temporaria=TRUE WHERE id=$3 RETURNING id, nome, filial, cargo`,
-        [matricula.trim(), hash, id]
+        `UPDATE colaboradores SET matricula=$1, senha_hash=$2, senha_temporaria=$3 WHERE id=$4 RETURNING id, nome, filial, cargo`,
+        [matricula.trim(), hash, temporaria, id]
       );
-      res.json({ ok: true, ...result.rows[0], precisaTrocarSenha: true });
+      res.json({ ok: true, ...result.rows[0], precisaTrocarSenha: temporaria });
     } catch (e) {
       if (e.code === '23505') return res.status(409).json({ ok: false, erro: 'Essa matricula ja esta em uso nesta filial.' });
       throw e;
@@ -375,15 +420,21 @@ app.post('/api/colaboradores/:id/resetar-acesso', async (req, res) => {
   }
 });
 
+// 23/09/2026, achado do QA (Coringa): esta rota é pública (sem
+// autenticação — o front chama de qualquer filial) e fazia SELECT *,
+// devolvendo senha_hash (bcrypt) e senha_temporaria de todo mundo pra
+// qualquer visitante. matricula continua aqui de propósito (a tela de
+// gestão de colaboradores exibe "Vinculado (matrícula)" legitimamente).
+const COLABORADOR_COLUNAS_PUBLICAS = 'id, nome, filial, cargo, telefone, ativo, created_at, matricula';
 app.get('/api/colaboradores', async (req, res) => {
   try {
     const { filial } = req.query;
     let query, params;
     if (!filial || filial.toUpperCase() === 'CORP') {
-      query = `SELECT * FROM colaboradores ORDER BY nome ASC`;
+      query = `SELECT ${COLABORADOR_COLUNAS_PUBLICAS} FROM colaboradores ORDER BY nome ASC`;
       params = [];
     } else {
-      query = `SELECT * FROM colaboradores WHERE filial = $1 ORDER BY nome ASC`;
+      query = `SELECT ${COLABORADOR_COLUNAS_PUBLICAS} FROM colaboradores WHERE filial = $1 ORDER BY nome ASC`;
       params = [filial.toUpperCase()];
     }
     const result = await pool.query(query, params);
@@ -394,12 +445,69 @@ app.get('/api/colaboradores', async (req, res) => {
   }
 });
 
+// ── Login "corp" (administrativo) — validado no servidor (23/09/2026) ──────
+app.post('/api/corp/login', async (req, res) => {
+  try {
+    const { senha } = req.body;
+    if (!senha) return res.status(400).json({ ok: false, erro: 'Digite a senha.' });
+    const cfg = await pool.query(`SELECT valor FROM config_sistema WHERE chave = 'senha_corp_hash'`);
+    if (!cfg.rows.length) return res.status(500).json({ ok: false, erro: 'Senha corp ainda não configurada.' });
+    const confere = await bcrypt.compare(senha, cfg.rows[0].valor);
+    if (!confere) return res.status(401).json({ ok: false, erro: 'Senha incorreta.' });
+    const tempCfg = await pool.query(`SELECT valor FROM config_sistema WHERE chave = 'senha_corp_temporaria'`);
+    res.json({ ok: true, precisaTrocarSenha: tempCfg.rows.length ? tempCfg.rows[0].valor === 'true' : false });
+  } catch (err) {
+    console.error('POST corp/login error:', err.message);
+    res.status(500).json({ ok: false, erro: err.message });
+  }
+});
+
+app.post('/api/corp/trocar-senha', async (req, res) => {
+  try {
+    const { senhaAtual, senhaNova } = req.body;
+    if (!senhaAtual || !senhaNova) return res.status(400).json({ ok: false, erro: 'Informe a senha atual e a nova.' });
+    if (senhaNova.length < 6) return res.status(400).json({ ok: false, erro: 'A nova senha precisa ter pelo menos 6 caracteres.' });
+    // 23/09/2026, achado do Coringa (validação): corp é a conta de maior
+    // privilégio (todas as 9 filiais) — mesmo guard que já existe pro
+    // colaborador, pra não permitir "trocar" pra senha padrão conhecida.
+    if (senhaNova === SENHA_PADRAO_COLABORADOR) return res.status(400).json({ ok: false, erro: 'Escolha uma senha diferente da senha padrão.' });
+    const cfg = await pool.query(`SELECT valor FROM config_sistema WHERE chave = 'senha_corp_hash'`);
+    if (!cfg.rows.length) return res.status(500).json({ ok: false, erro: 'Senha corp ainda não configurada.' });
+    const confere = await bcrypt.compare(senhaAtual, cfg.rows[0].valor);
+    if (!confere) return res.status(401).json({ ok: false, erro: 'Senha atual incorreta.' });
+    const hash = await bcrypt.hash(senhaNova, 10);
+    await pool.query(`UPDATE config_sistema SET valor=$1 WHERE chave='senha_corp_hash'`, [hash]);
+    await pool.query(`UPDATE config_sistema SET valor='false' WHERE chave='senha_corp_temporaria'`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST corp/trocar-senha error:', err.message);
+    res.status(500).json({ ok: false, erro: err.message });
+  }
+});
+
+app.post('/api/corp/resetar-senha', async (req, res) => {
+  try {
+    const { codigoReset } = req.body;
+    if (codigoReset !== RESET_CODE_CORP) return res.status(403).json({ ok: false, erro: 'Código de reset incorreto.' });
+    const hash = await bcrypt.hash(SENHA_PADRAO_COLABORADOR, 10);
+    await pool.query(`UPDATE config_sistema SET valor=$1 WHERE chave='senha_corp_hash'`, [hash]);
+    await pool.query(`UPDATE config_sistema SET valor='true' WHERE chave='senha_corp_temporaria'`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('POST corp/resetar-senha error:', err.message);
+    res.status(500).json({ ok: false, erro: err.message });
+  }
+});
+
 app.post('/api/colaboradores', async (req, res) => {
   try {
     const { nome, filial, cargo, telefone } = req.body;
     if (!nome || !filial) return res.status(400).json({ error: 'Nome e filial sao obrigatorios.' });
+    // 23/09/2026, achado do Coringa (3ª validação): RETURNING * aqui e no
+    // PUT abaixo vazavam senha_hash/senha_temporaria em toda escrita —
+    // mesmo problema já corrigido no GET, esquecido nestas duas rotas.
     const result = await pool.query(
-      `INSERT INTO colaboradores (nome, filial, cargo, telefone) VALUES ($1,$2,$3,$4) RETURNING *`,
+      `INSERT INTO colaboradores (nome, filial, cargo, telefone) VALUES ($1,$2,$3,$4) RETURNING ${COLABORADOR_COLUNAS_PUBLICAS}`,
       [nome, (filial || '').toUpperCase(), cargo || '', telefone || '']
       );
     res.status(201).json(result.rows[0]);
@@ -414,7 +522,7 @@ app.put('/api/colaboradores/:id', async (req, res) => {
     const { id } = req.params;
     const { nome, filial, cargo, telefone, ativo } = req.body;
     const result = await pool.query(
-      `UPDATE colaboradores SET nome=$1, filial=$2, cargo=$3, telefone=$4, ativo=$5 WHERE id=$6 RETURNING *`,
+      `UPDATE colaboradores SET nome=$1, filial=$2, cargo=$3, telefone=$4, ativo=$5 WHERE id=$6 RETURNING ${COLABORADOR_COLUNAS_PUBLICAS}`,
       [nome || '', (filial || '').toUpperCase(), cargo || '', telefone || '', ativo !== false, id]
       );
     if (!result.rows.length) return res.status(404).json({ error: 'Colaborador nao encontrado.' });

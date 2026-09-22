@@ -463,18 +463,10 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
 </div>
 <script>
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
-const DEFAULT_PW = 'bordados2026';
-const RESET_CODE = 'bordados2026';
-const CORP_PW_KEY = 'bor_pw_corp';
 const FILIAIS = {
   gus:'Garanhuns',imb:'Imbiribeira',pal:'Paralela',tam:'Tamarineira',
   aju:'Aracaju',jpa:'João Pessoa',png:'Ponta Negra',cau:'Caruaru',bar:'Barris',corp:'Corporativo'
 };
-
-// Inicializar senha do corp se não existir
-if (!localStorage.getItem(CORP_PW_KEY)) {
-  localStorage.setItem(CORP_PW_KEY, '123456');
-}
 
 let currentFilial = null;
   let editingId = null;
@@ -510,18 +502,17 @@ function diffDays(d1, d2) {
 }
 
 // ─── AUTH ─────────────────────────────────────────────────────────────────────
-// 04/09/2026: "corp" (administrativo) continua com senha única compartilhada,
-// só do jeito que já era — decisão explícita do Victor. As filiais de loja
-// passam a usar login individual por Matrícula (ver /api/colaboradores/login,
-// servidor valida com hash bcrypt em vez de senha em texto puro salva no
-// navegador).
-function getPw(filial) {
-  const key = 'bor_pw_' + filial;
-  return localStorage.getItem(key) || DEFAULT_PW;
-}
-function setPw(filial, pw) {
-  localStorage.setItem('bor_pw_' + filial, pw);
-}
+// 04/09/2026: filiais de loja usam login individual por Matrícula
+// (/api/colaboradores/login, servidor valida com hash bcrypt).
+// 23/09/2026, achado do QA (Coringa): "corp" (administrativo) até então era
+// uma senha única guardada em texto puro no localStorage e comparada aqui no
+// navegador — qualquer um abria o DevTools e entrava sem senha real nenhuma.
+// Migrado pro mesmo padrão de validação no servidor (/api/corp/login).
+// Guarda a senha que a pessoa acabou de digitar com sucesso no login, pra
+// poder reenviar como "senha atual" se ela for obrigada a trocar em seguida
+// — evita o front precisar conhecer o valor real de nenhuma senha padrão
+// (nem de colaborador, nem de corp).
+let _senhaRecemDigitada = null;
 
 function onFilialLoginChange() {
   const filial = document.getElementById('selFilial').value;
@@ -537,18 +528,28 @@ async function doLogin() {
   if (!filial) { msg.textContent = 'Selecione uma filial.'; msg.className = 'login-msg error'; return; }
   if (!senha) { msg.textContent = 'Digite a senha.'; msg.className = 'login-msg error'; return; }
 
-  // ── Corp: fluxo antigo, sem mudança ──
+  // ── Corp: validado no servidor (23/09/2026) ──
   if (filial === 'corp') {
-    const saved = getPw(filial);
-    if (senha !== saved) { msg.textContent = 'Senha incorreta.'; msg.className = 'login-msg error'; return; }
-    currentFilial = filial;
-    currentColaborador = null;
-    if (saved === DEFAULT_PW) {
-      document.getElementById('loginScreen').style.display = 'none';
-      document.getElementById('changePwScreen').style.display = 'flex';
-      return;
+    try {
+      const resp = await fetch('/api/corp/login', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ senha })
+      });
+      const data = await resp.json();
+      if (!data.ok) { msg.textContent = data.erro || 'Senha incorreta.'; msg.className = 'login-msg error'; return; }
+      currentFilial = filial;
+      currentColaborador = null;
+      _senhaRecemDigitada = senha;
+      if (data.precisaTrocarSenha) {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('changePwScreen').style.display = 'flex';
+        return;
+      }
+      enterApp();
+    } catch (e) {
+      msg.textContent = 'Erro de conexão com o servidor.';
+      msg.className = 'login-msg error';
     }
-    enterApp();
     return;
   }
 
@@ -565,6 +566,7 @@ async function doLogin() {
     if (data.ok) {
       currentFilial = filial;
       currentColaborador = { id: data.id, nome: data.nome };
+      _senhaRecemDigitada = senha;
       if (data.precisaTrocarSenha) {
         abrirTrocarSenhaColaborador();
       } else {
@@ -602,14 +604,36 @@ async function doChangePw() {
   const msg = document.getElementById('changePwMsg');
   if (nova.length < 6) { msg.textContent = 'Mínimo 6 caracteres.'; return; }
   if (nova !== conf) { msg.textContent = 'As senhas não coincidem.'; return; }
-  if (nova === DEFAULT_PW) { msg.textContent = 'Escolha uma senha diferente da senha padrão.'; return; }
+
+  // ── Primeiro acesso (vincular matrícula): manda a senha escolhida já
+  // junto com o vínculo, num passo só (ver confirmarVinculo) ──
+  if (_loginPendente && _loginPendente.colaboradorId) {
+    try {
+      const resp = await fetch('/api/colaboradores/' + _loginPendente.colaboradorId + '/vincular', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ matricula: _loginPendente.matricula, senhaNova: nova })
+      });
+      const data = await resp.json();
+      if (!data.ok) { msg.textContent = data.erro || 'Não foi possível vincular.'; return; }
+      currentFilial = _loginPendente.filial.toLowerCase();
+      currentColaborador = { id: data.id, nome: data.nome };
+      _loginPendente = null;
+    } catch (e) {
+      msg.textContent = 'Erro de conexão com o servidor.';
+      return;
+    }
+    msg.textContent = '';
+    document.getElementById('changePwScreen').style.display = 'none';
+    enterApp();
+    return;
+  }
 
   // ── Colaborador de filial: senha trocada no servidor (bcrypt) ──
   if (currentColaborador) {
     try {
       const resp = await fetch('/api/colaboradores/' + currentColaborador.id + '/trocar-senha', {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ senhaAtual: DEFAULT_PW, senhaNova: nova })
+        body: JSON.stringify({ senhaAtual: _senhaRecemDigitada, senhaNova: nova })
       });
       const data = await resp.json();
       if (!data.ok) { msg.textContent = data.erro || 'Não foi possível trocar a senha.'; return; }
@@ -623,23 +647,42 @@ async function doChangePw() {
     return;
   }
 
-  // ── Corp: fluxo antigo, senha unica salva so no navegador ──
-  setPw(currentFilial, nova);
+  // ── Corp: senha trocada no servidor (23/09/2026) ──
+  try {
+    const resp = await fetch('/api/corp/trocar-senha', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ senhaAtual: _senhaRecemDigitada, senhaNova: nova })
+    });
+    const data = await resp.json();
+    if (!data.ok) { msg.textContent = data.erro || 'Não foi possível trocar a senha.'; return; }
+  } catch (e) {
+    msg.textContent = 'Erro de conexão com o servidor.';
+    return;
+  }
   msg.textContent = '';
   document.getElementById('changePwScreen').style.display = 'none';
   enterApp();
 }
 
-function showForgot() {
+async function showForgot() {
   const filial = document.getElementById('selFilial').value;
   if (!filial) { alert('Selecione a filial primeiro.'); return; }
   if (filial === 'corp') {
     const code = prompt('Digite o código de reset:');
-    if (code === RESET_CODE) {
-      setPw(filial, DEFAULT_PW);
-      alert('Senha resetada para o padrão. Use "' + DEFAULT_PW + '" para entrar.');
-    } else {
-      alert('Código incorreto.');
+    if (!code) return;
+    try {
+      const resp = await fetch('/api/corp/resetar-senha', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ codigoReset: code })
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        alert('Senha resetada para o padrão. Peça o valor padrão ao administrativo (Trade Marketing).');
+      } else {
+        alert(data.erro || 'Código incorreto.');
+      }
+    } catch (e) {
+      alert('Erro de conexão com o servidor.');
     }
     return;
   }
@@ -684,21 +727,13 @@ async function confirmarVinculo() {
   const msg = document.getElementById('vincularMsg');
   if (!id) { msg.textContent = 'Selecione seu nome.'; return; }
   if (!_loginPendente) return;
-  try {
-    const resp = await fetch('/api/colaboradores/' + id + '/vincular', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ matricula: _loginPendente.matricula })
-    });
-    const data = await resp.json();
-    if (!data.ok) { msg.textContent = data.erro || 'Erro ao vincular.'; return; }
-    currentFilial = _loginPendente.filial.toLowerCase();
-    currentColaborador = { id: data.id, nome: data.nome };
-    _loginPendente = null;
-    document.getElementById('vincularScreen').style.display = 'none';
-    abrirTrocarSenhaColaborador();
-  } catch (e) {
-    msg.textContent = 'Erro de conexão.';
-  }
+  // 23/09/2026, achado do Coringa: em vez de vincular já com a senha padrão
+  // e depender do client saber esse valor pra trocar em seguida, pede a
+  // senha nova aqui e manda tudo junto pro /vincular (ver doChangePw) —
+  // elimina o estado intermediário "senha padrão temporária".
+  _loginPendente.colaboradorId = id;
+  document.getElementById('vincularScreen').style.display = 'none';
+  abrirTrocarSenhaColaborador();
 }
 
 function enterApp() {
