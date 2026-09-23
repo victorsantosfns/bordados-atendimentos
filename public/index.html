@@ -329,8 +329,8 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
           <input type="text" id="frmNomeCliente" placeholder="Nome completo" required/>
         </div>
         <div class="form-group">
-          <label>Nr da CI</label>
-          <input type="text" id="frmCi" placeholder="000000000000"/>
+          <label>Nr da CI (nº da nota — 11 dígitos)</label>
+          <input type="text" id="frmCi" inputmode="numeric" maxlength="11" autocomplete="off" placeholder="Ex.: 01203183175" oninput="this.value=this.value.replace(/\D/g,'')" title="O CI é o número da nota: exatamente 11 dígitos, só números"/>
         </div>
         <div class="form-group">
           <label>CPF / CNPJ</label>
@@ -470,6 +470,7 @@ const FILIAIS = {
 
 let currentFilial = null;
   let editingId = null;
+  let editingCiOriginal = '';
   let editingFilial = null;
 let allAtendimentos = [];
 let charts = {};
@@ -903,6 +904,7 @@ function clearForm() {
   document.getElementById('frmCi').value = '';
   document.getElementById('frmCpf').value = '';
   editingId = null;
+  editingCiOriginal = '';
   editingFilial = null;
   document.getElementById('formEditBanner').style.display = 'none';
   document.getElementById('btnSubmitAtendimento').textContent = 'Confirmar Atendimento';
@@ -937,6 +939,12 @@ const filial = editingId
 
   const toalhas = getToalhas();
   if (!toalhas.length) { showMsg('formMsg','error','Adicione pelo menos uma toalha ao atendimento.'); return; }
+  // CI = número da nota: 11 dígitos numéricos (em edição, só cobra se o CI foi alterado)
+  const ciDigitado = document.getElementById('frmCi').value.trim();
+  if (ciDigitado && !/^\d{11}$/.test(ciDigitado) && ciDigitado !== editingCiOriginal) {
+    showMsg('formMsg','error','CI inválida: o CI é o número da nota e tem exatamente 11 dígitos, somente números (ex.: 01203183175). Você digitou ' + ciDigitado.replace(/\D/g,'').length + ' dígito(s). Confira na nota.');
+    return;
+  }
 
   const body = {
     filial, atendente, nomeCliente,
@@ -1072,6 +1080,7 @@ function renderTable(data) {
     document.getElementById('frmDataEntrega').value = brToISO(a.data_entrega);
     document.getElementById('frmNomeCliente').value = a.nome_cliente || '';
     document.getElementById('frmCi').value = a.ci || '';
+    editingCiOriginal = String(a.ci || '').trim();
     document.getElementById('frmCpf').value = a.cpf || '';
     document.getElementById('frmTipoCli').value = a.tipo_cli || 'PF';
 

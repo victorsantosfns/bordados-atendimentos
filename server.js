@@ -174,6 +174,14 @@ app.get('/api/atendimentos', async (req, res) => {
     }
 });
 
+// CI = NUMNOTA da nota fiscal: sempre 11 digitos numericos (validado em 23/09/2026
+// contra o Oracle: 100% das notas tem 11 digitos). Vazio continua permitido.
+function erroCi(ci) {
+  const v = String(ci == null ? '' : ci).trim();
+  if (!v || /^\d{11}$/.test(v)) return null;
+  return 'CI invalida: o numero da nota (CI) tem exatamente 11 digitos, so numeros (ex.: 01203183175). Voce informou "' + v.slice(0, 30) + '" (' + v.replace(/\D/g, '').length + ' digito(s)).';
+}
+
 app.post('/api/atendimentos', async (req, res) => {
   try {
     const {
@@ -183,6 +191,8 @@ app.post('/api/atendimentos', async (req, res) => {
     } = req.body;
     if (!filial) return res.status(400).json({ error: 'Filial obrigatoria.' });
     if (!Array.isArray(toalhas) || toalhas.length === 0) return res.status(400).json({ error: 'Informe ao menos uma toalha.' });
+    const erroDoCi = erroCi(ci);
+    if (erroDoCi) return res.status(400).json({ error: erroDoCi });
     const result = await pool.query(
       `INSERT INTO atendimentos
       (filial, atendente, nome_cliente, ci, cpf, tipo_cli,
@@ -194,7 +204,7 @@ app.post('/api/atendimentos', async (req, res) => {
         (filial || '').toUpperCase(),
         atendente || '',
         nomeCliente || '',
-        ci || '',
+        String(ci == null ? '' : ci).trim(),
         cpf || '',
         tipoCli || '',
         dataReceb || '',
@@ -223,6 +233,12 @@ app.put('/api/atendimentos/:id', async (req, res) => {
       dataReceb, dataEntrega, toalhas, produto, qtde,
       corLinha, fonte, epi, motivoEpi
     } = req.body;
+    // So cobra o padrao se o CI mudou: registro antigo com CI fora do padrao continua editavel (dar baixa etc.)
+    const antes = await pool.query('SELECT ci FROM atendimentos WHERE id=$1', [id]);
+    if (antes.rows.length && String(ci == null ? '' : ci).trim() !== String(antes.rows[0].ci == null ? '' : antes.rows[0].ci).trim()) {
+      const erroDoCi = erroCi(ci);
+      if (erroDoCi) return res.status(400).json({ error: erroDoCi });
+    }
     const result = await pool.query(
       `UPDATE atendimentos SET
       filial=$1, atendente=$2, nome_cliente=$3, ci=$4, cpf=$5, tipo_cli=$6,
@@ -234,7 +250,7 @@ app.put('/api/atendimentos/:id', async (req, res) => {
         (filial || '').toUpperCase(),
         atendente || '',
         nomeCliente || '',
-        ci || '',
+        String(ci == null ? '' : ci).trim(),
         cpf || '',
         tipoCli || '',
         dataReceb || '',
