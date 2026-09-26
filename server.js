@@ -19,6 +19,7 @@ const RESET_CODE_CORP = process.env.RESET_CODE_CORP || 'bordados2026';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const BORDADOS_TOKEN = process.env.BORDADOS_TOKEN || 'bordados-2026-token-temporario';
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -30,6 +31,18 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// 26/09/2026: autenticação para rotas de atendimentos (Coringa audit achado crítico)
+function validarTokenAtendimentos(req, res, next) {
+  const token = req.headers['x-bordados-token'];
+  if (!token || token !== BORDADOS_TOKEN) {
+    return res.status(403).json({ error: 'Token inválido ou ausente. Inclua header X-Bordados-Token.' });
+  }
+  next();
+}
+
+// Constante: Jogo de Toalhas = 2 peças (regra de negócio, 26/09/2026)
+const BORD_PECAS_POR_JOGO = 2;
 
 async function initDB() {
     try {
@@ -155,7 +168,7 @@ async function criarTabelasFesindico() {
   await pool.query(`CREATE TABLE IF NOT EXISTS cnpjs_fc (cnpj TEXT PRIMARY KEY)`);
 }
 
-app.get('/api/atendimentos', async (req, res) => {
+app.get('/api/atendimentos', validarTokenAtendimentos, async (req, res) => {
     try {
           const { filial } = req.query;
           let query, params;
@@ -167,7 +180,12 @@ app.get('/api/atendimentos', async (req, res) => {
                   params = [filial.toUpperCase()];
           }
           const result = await pool.query(query, params);
-          res.json(result.rows);
+          // 26/09/2026: aplicar regra de "Jogo de Toalhas = 2 peças" na resposta
+          const rows = result.rows.map(r => ({
+            ...r,
+            qtde_total_pecas: r.produto === 'Jogo de Toalhas' ? (r.qtde || 0) * BORD_PECAS_POR_JOGO : (r.qtde || 0)
+          }));
+          res.json(rows);
     } catch (err) {
           console.error('GET error:', err.message);
           res.status(500).json({ error: err.message });
@@ -182,7 +200,7 @@ function erroCi(ci) {
   return 'CI invalida: o numero da nota (CI) tem exatamente 11 digitos, so numeros (ex.: 01203183175). Voce informou "' + v.slice(0, 30) + '" (' + v.replace(/\D/g, '').length + ' digito(s)).';
 }
 
-app.post('/api/atendimentos', async (req, res) => {
+app.post('/api/atendimentos', validarTokenAtendimentos, async (req, res) => {
   try {
     const {
       filial, atendente, nomeCliente, ci, cpf, tipoCli,
@@ -225,7 +243,7 @@ app.post('/api/atendimentos', async (req, res) => {
   }
 });
 
-app.put('/api/atendimentos/:id', async (req, res) => {
+app.put('/api/atendimentos/:id', validarTokenAtendimentos, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -273,7 +291,7 @@ app.put('/api/atendimentos/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/atendimentos/:id', async (req, res) => {
+app.delete('/api/atendimentos/:id', validarTokenAtendimentos, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query('DELETE FROM atendimentos WHERE id=$1 RETURNING id', [id]);
