@@ -13,13 +13,20 @@ jobs:
         run: |
           DATE=$(date -u +%F)
           echo "BACKUP_DATE=$DATE" >> "$GITHUB_ENV"
-          curl -sS -f "https://bordados-atendimentos.onrender.com/api/atendimentos?filial=CORP" -o "atendimentos_${DATE}.json"
+          # Desde 26/09/2026 a API exige o header X-Bordados-Token (commit cd1bdf3). O valor fica no Secret BORDADOS_TOKEN do repositório.
+          if [ -z "$BORDADOS_TOKEN" ]; then
+            echo "Secret BORDADOS_TOKEN não configurado no repositório (Settings > Secrets and variables > Actions)." >&2
+            exit 1
+          fi
+          curl -sS -f -H "X-Bordados-Token: ${BORDADOS_TOKEN}" "https://bordados-atendimentos.onrender.com/api/atendimentos?filial=CORP" -o "atendimentos_${DATE}.json"
           COUNT=$(node -e "console.log(JSON.parse(require('fs').readFileSync('atendimentos_${DATE}.json')).length)")
           echo "Registros baixados: $COUNT"
           if [ "$COUNT" -lt 1 ]; then
             echo "Backup vazio ou inválido, abortando." >&2
             exit 1
           fi
+        env:
+          BORDADOS_TOKEN: ${{ secrets.BORDADOS_TOKEN }}
 
       - name: Clonar repositório de backup no GitLab
         run: |
