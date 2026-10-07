@@ -462,6 +462,24 @@ table.toalhas-table input:focus,table.toalhas-table select:focus{border-color:va
   </div>
 </div>
 <script>
+// 07/10/2026: token da API de atendimentos. Vem do servidor na resposta de login/vínculo/troca de senha e fica só no sessionStorage.
+(function(){
+  var f = window.fetch;
+  var LOGIN = /^\/api\/(corp\/login|corp\/trocar-senha|colaboradores\/login|colaboradores\/\d+\/vincular|colaboradores\/\d+\/trocar-senha)$/;
+  window.fetch = function(url, opts){
+    var u = typeof url === 'string' ? url : '';
+    var path = u.split('?')[0];
+    if (path.indexOf('/api/atendimentos') === 0) {
+      var t = null; try { t = sessionStorage.getItem('bor_token'); } catch (e) {}
+      if (t) { opts = Object.assign({}, opts); opts.headers = Object.assign({}, opts.headers, { 'X-Bordados-Token': t }); }
+    }
+    var p = f.call(this, url, opts);
+    if (LOGIN.test(path)) {
+      p.then(function(r){ return r.clone().json(); }).then(function(d){ if (d && d.token) { try { sessionStorage.setItem('bor_token', d.token); } catch (e) {} } }).catch(function(){});
+    }
+    return p;
+  };
+})();
 // ─── CONSTANTES ───────────────────────────────────────────────────────────────
 const FILIAIS = {
   gus:'Garanhuns',imb:'Imbiribeira',pal:'Paralela',tam:'Tamarineira',

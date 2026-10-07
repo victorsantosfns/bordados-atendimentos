@@ -41,6 +41,17 @@ function validarTokenAtendimentos(req, res, next) {
   next();
 }
 
+// 07/10/2026: o front avulso nunca enviava o X-Bordados-Token (a API passou a exigi-lo em 26/09), então salvar/listar atendimentos dava
+// "Token inválido ou ausente". O token não vai mais embutido na página: o servidor o entrega só na resposta de um login/vínculo/troca de senha
+// BEM-SUCEDIDOS, e o front o guarda no sessionStorage e o manda nas chamadas de /api/atendimentos.
+app.use((req, res, next) => {
+  if (req.method === 'POST' && /^\/api\/(corp\/login|corp\/trocar-senha|colaboradores\/login|colaboradores\/\d+\/vincular|colaboradores\/\d+\/trocar-senha)$/.test(req.path)) {
+    const jsonOriginal = res.json.bind(res);
+    res.json = (corpo) => { if (corpo && corpo.ok === true) corpo.token = BORDADOS_TOKEN; return jsonOriginal(corpo); };
+  }
+  next();
+});
+
 // Constante: Jogo de Toalhas = 2 peças (regra de negócio, 26/09/2026)
 const BORD_PECAS_POR_JOGO = 2;
 
